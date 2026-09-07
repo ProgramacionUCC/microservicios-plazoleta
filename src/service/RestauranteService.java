@@ -9,10 +9,18 @@ public class RestauranteService {
 
     private final RestauranteRepository restauranteRepository;
     private final PropietarioRepository propietarioRepository;
+    private final AutenticacionService authService;
 
     public RestauranteService(RestauranteRepository restauranteRepository, PropietarioRepository propietarioRepository) {
         this.restauranteRepository = restauranteRepository;
         this.propietarioRepository = propietarioRepository;
+        this.authService = new AutenticacionService(propietarioRepository);
+    }
+
+    public RestauranteService(RestauranteRepository restauranteRepository, PropietarioRepository propietarioRepository, AutenticacionService authService) {
+        this.restauranteRepository = restauranteRepository;
+        this.propietarioRepository = propietarioRepository;
+        this.authService = authService;
     }
 
     public void crearRestaurante(Restaurante restaurante) {
@@ -50,6 +58,16 @@ public class RestauranteService {
             throw new IllegalArgumentException("El ID del propietario no corresponde a un usuario registrado con dicho rol.");
         }
 
+        // UNIQUE: NIT y nombre no se repiten
+        if (restauranteRepository.obtenerTodos().stream().anyMatch(r -> r.getNit().equals(restaurante.getNit()))) {
+            throw new IllegalArgumentException("NIT ya registrado (UNIQUE)");
+        }
+        if (restauranteRepository.obtenerTodos().stream().anyMatch(r -> r.getNombre().equalsIgnoreCase(restaurante.getNombre()))) {
+            throw new IllegalArgumentException("Nombre restaurante ya existe (UNIQUE)");
+        }
+
+        // CHECK: ya validado arriba (nombre no solo numeros, NIT numerico, telefono formato)
+
         // Guardar restaurante en memoria tras pasar todas las validaciones
         restauranteRepository.guardar(restaurante);
     }
@@ -59,7 +77,7 @@ public class RestauranteService {
         if (usuarioAutenticado == null) {
             throw new IllegalArgumentException("Debe estar autenticado para crear restaurante.");
         }
-        if (!"ADMINISTRADOR".equalsIgnoreCase(usuarioAutenticado.getRol())) {
+        if (!authService.tienePermiso(usuarioAutenticado, "ADMINISTRADOR")) {
             throw new IllegalArgumentException("Solo el administrador puede crear restaurantes.");
         }
         crearRestaurante(restaurante);
