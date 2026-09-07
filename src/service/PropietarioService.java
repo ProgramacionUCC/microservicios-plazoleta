@@ -21,18 +21,35 @@ public class PropietarioService {
 
     // Donde se guardan los propietarios
     private final PropietarioRepository repository;
+    private final AutenticacionService authService;
 
     // Recibe el repository para poder guardar
     public PropietarioService(PropietarioRepository repository) {
         this.repository = repository;
+        this.authService = new AutenticacionService(repository);
+    }
+
+    public PropietarioService(PropietarioRepository repository, AutenticacionService authService) {
+        this.repository = repository;
+        this.authService = authService;
     }
 
     // Metodo principal: hace todo paso a paso (sin autenticacion - para bootstrap inicial)
     public void registrarPropietario(Propietario propietario) {
         validarObligatorios(propietario);           // 1. revisa que nada venga vacio
         validarFormato(propietario);                // 2. revisa que email, celular, documento y edad esten bien
-        encriptarClave(propietario);                // 3. cambia la clave por una encriptada
-        repository.guardarPropietario(propietario); // 4. lo guarda en la lista
+        validarUnicos(propietario);                 // 3. UNIQUE: correo y documento no se repiten
+        encriptarClave(propietario);                // 4. cambia la clave por una encriptada
+        repository.guardarPropietario(propietario); // 5. lo guarda en la lista
+    }
+
+    private void validarUnicos(Propietario propietario) {
+        if (repository.getPropietarios().stream().anyMatch(p -> p.getCorreo().equalsIgnoreCase(propietario.getCorreo()))) {
+            throw new IllegalArgumentException("Correo ya registrado (UNIQUE)");
+        }
+        if (repository.getPropietarios().stream().anyMatch(p -> p.getDocumentoDeIdentidad().equals(propietario.getDocumentoDeIdentidad()))) {
+            throw new IllegalArgumentException("Documento ya registrado (UNIQUE)");
+        }
     }
 
     // Metodo con autenticacion HU-05: solo ADMINISTRADOR puede crear propietarios
@@ -40,7 +57,7 @@ public class PropietarioService {
         if (usuarioAutenticado == null) {
             throw new IllegalArgumentException("Debe estar autenticado para crear propietario.");
         }
-        if (!"ADMINISTRADOR".equalsIgnoreCase(usuarioAutenticado.getRol())) {
+        if (!authService.tienePermiso(usuarioAutenticado, "ADMINISTRADOR")) {
             throw new IllegalArgumentException("Solo el administrador puede crear propietarios.");
         }
         registrarPropietario(propietario);

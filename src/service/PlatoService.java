@@ -10,10 +10,18 @@ public class PlatoService {
 
     private final PlatoRepository platoRepository;
     private final RestauranteRepository restauranteRepository;
+    private final AutenticacionService authService;
 
     public PlatoService(PlatoRepository platoRepository, RestauranteRepository restauranteRepository) {
         this.platoRepository = platoRepository;
         this.restauranteRepository = restauranteRepository;
+        this.authService = null;
+    }
+
+    public PlatoService(PlatoRepository platoRepository, RestauranteRepository restauranteRepository, AutenticacionService authService) {
+        this.platoRepository = platoRepository;
+        this.restauranteRepository = restauranteRepository;
+        this.authService = authService;
     }
 
     // Metodo legacy con String (mantiene compatibilidad con pruebas anteriores)
@@ -49,7 +57,11 @@ public class PlatoService {
         if (usuarioAutenticado == null) {
             throw new IllegalArgumentException("Debe estar autenticado para crear plato.");
         }
-        if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
+        if (authService != null) {
+            if (!authService.tienePermiso(usuarioAutenticado, "PROPIETARIO")) {
+                throw new IllegalArgumentException("Solo el propietario puede crear platos.");
+            }
+        } else if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
             throw new IllegalArgumentException("Solo el propietario puede crear platos.");
         }
         crearPlato(plato, usuarioAutenticado.getDocumentoDeIdentidad());
@@ -60,7 +72,11 @@ public class PlatoService {
         if (usuarioAutenticado == null) {
             throw new IllegalArgumentException("Debe estar autenticado para modificar plato.");
         }
-        if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
+        if (authService != null) {
+            if (!authService.tienePermiso(usuarioAutenticado, "PROPIETARIO")) {
+                throw new IllegalArgumentException("Solo el propietario puede modificar platos.");
+            }
+        } else if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
             throw new IllegalArgumentException("Solo el propietario puede modificar platos.");
         }
         modificarPlato(nombrePlato, idRestaurante, nuevoPrecio, nuevaDescripcion, usuarioAutenticado.getDocumentoDeIdentidad());

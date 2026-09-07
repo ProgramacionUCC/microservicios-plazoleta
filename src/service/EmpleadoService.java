@@ -21,19 +21,31 @@ public class EmpleadoService {
 
     private final EmpleadoRepository empleadoRepository;
     private final RestauranteRepository restauranteRepository;
+    private final AutenticacionService authService;
 
     public EmpleadoService(EmpleadoRepository empleadoRepository, RestauranteRepository restauranteRepository) {
         this.empleadoRepository = empleadoRepository;
         this.restauranteRepository = restauranteRepository;
+        this.authService = null;
+    }
+
+    public EmpleadoService(EmpleadoRepository empleadoRepository, RestauranteRepository restauranteRepository, AutenticacionService authService) {
+        this.empleadoRepository = empleadoRepository;
+        this.restauranteRepository = restauranteRepository;
+        this.authService = authService;
     }
 
     // Metodo con autenticacion: solo PROPIETARIO dueño del restaurante puede crear empleado
     public void crearEmpleado(Empleado empleado, Propietario usuarioAutenticado) {
-        // 1. Validar autenticacion y rol
+        // 1. Validar autenticacion y rol via AutenticacionService
         if (usuarioAutenticado == null) {
             throw new IllegalArgumentException("Debe estar autenticado para crear empleado.");
         }
-        if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
+        if (authService != null) {
+            if (!authService.tienePermiso(usuarioAutenticado, "PROPIETARIO")) {
+                throw new IllegalArgumentException("Solo el propietario puede crear empleados.");
+            }
+        } else if (!"PROPIETARIO".equalsIgnoreCase(usuarioAutenticado.getRol())) {
             throw new IllegalArgumentException("Solo el propietario puede crear empleados.");
         }
 
