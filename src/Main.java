@@ -19,7 +19,8 @@ public class Main {
     public static void main(String[] args) {
         // --- HU-01: crear propietario ---
         PropietarioRepository propRepo = new PropietarioRepository();
-        PropietarioService propService = new PropietarioService(propRepo);
+        AutenticacionService authServiceEarly = new AutenticacionService(propRepo);
+        PropietarioService propService = new PropietarioService(propRepo, authServiceEarly);
 
         Propietario p1 = new Propietario(
                 "Carlos",
@@ -36,7 +37,7 @@ public class Main {
 
         // --- HU-02: crear restaurante (requiere propietario existente) ---
         RestauranteRepository restRepo = new RestauranteRepository();
-        RestauranteService restService = new RestauranteService(restRepo, propRepo);
+        RestauranteService restService = new RestauranteService(restRepo, propRepo, authServiceEarly);
 
         Restaurante r1 = new Restaurante(
                 "La Plazoleta",
@@ -53,7 +54,7 @@ public class Main {
 
         // --- HU-03: crear plato (requiere restaurante existente y su propietario) ---
         PlatoRepository platoRepo = new PlatoRepository();
-        PlatoService platoService = new PlatoService(platoRepo, restRepo);
+        PlatoService platoService = new PlatoService(platoRepo, restRepo, authServiceEarly);
 
         System.out.println("\n--- Pruebas HU-03 ---");
 
@@ -129,7 +130,7 @@ public class Main {
 
         // --- HU-05: autenticacion (correo y clave, intentos ilimitados, permisos por rol) ---
         System.out.println("\n--- Pruebas HU-05 ---");
-        AutenticacionService authService = new AutenticacionService(propRepo);
+        AutenticacionService authService = authServiceEarly;
 
         // login correcto
         try {
@@ -200,7 +201,7 @@ public class Main {
         // 3. Creacion de empleado solo por PROPIETARIO dueño
         System.out.println("\n[3] Crear empleado solo propietario dueño:");
         EmpleadoRepository empRepo = new EmpleadoRepository();
-        EmpleadoService empService = new EmpleadoService(empRepo, restRepo);
+        EmpleadoService empService = new EmpleadoService(empRepo, restRepo, authService);
         Empleado emp1 = new Empleado("Pedro", "Empleado", "33333333", "+573003334455", LocalDate.of(1998, 7, 20), "pedro@mail.com", "emp123", "900123456");
         try {
             empService.crearEmpleado(emp1, propietarioLogueado);
