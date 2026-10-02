@@ -4,6 +4,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Lo que se devuelve al crear o listar categorias.
+ * El id sirve para luego crear platos con esa categoria.
+ */
 @Getter
 @Setter
 @Builder
