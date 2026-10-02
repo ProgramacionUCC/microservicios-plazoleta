@@ -12,17 +12,29 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@RestController
-@RequestMapping("/api/v1/usuarios")
-@RequiredArgsConstructor
+/**
+ * CONTROLLER = la "puerta de entrada". Recibe las peticiones de Postman
+ * y devuelve la respuesta. No tiene reglas de negocio: se las pasa al service.
+ */
+@RestController                       // Esta clase recibe peticiones y responde JSON
+@RequestMapping("/api/v1/usuarios")   // Todas las rutas de esta clase empiezan asi
+@RequiredArgsConstructor              // Spring nos inyecta el UsuarioService
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
 
-    // HU-01: crear propietario
-    // @Valid hace que se revisen las reglas del DTO antes de entrar
+    /**
+     * HU-01: crear propietario.
+     * POST http://localhost:8080/api/v1/usuarios/propietario
+     * Solo ADMINISTRADOR (esa regla esta en SecurityConfig, HU-05).
+     *
+     * @RequestBody: convierte el JSON que llega en un PropietarioRequestDTO.
+     * @Valid: revisa las anotaciones del DTO (@NotBlank, @Email...) ANTES de entrar.
+     *         Si algo falla, ni siquiera se ejecuta este metodo: responde 400.
+     */
     @PostMapping("/propietario")
     public ResponseEntity<UsuarioResponseDTO> crearPropietario(@Valid @RequestBody PropietarioRequestDTO propietarioRequestDTO) {
+        // ResponseEntity permite elegir el codigo HTTP: 201 CREATED = se creo algo nuevo
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(usuarioService.crearPropietario(propietarioRequestDTO));
     }
