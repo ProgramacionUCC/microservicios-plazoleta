@@ -5,6 +5,7 @@ import com.plazoleta.dto.request.PlatoRequestDTO;
 import com.plazoleta.dto.response.PlatoResponseDTO;
 
 public interface PlatoService {
-    PlatoResponseDTO crearPlato(PlatoRequestDTO platoRequestDTO);
-    PlatoResponseDTO modificarPlato(Integer idPlato, ModificarPlatoRequestDTO modificarPlatoRequestDTO);
+    // correoUsuario: el correo del usuario que hizo login (sale del token)
+    PlatoResponseDTO crearPlato(PlatoRequestDTO platoRequestDTO, String correoUsuario);
+    PlatoResponseDTO modificarPlato(Integer idPlato, ModificarPlatoRequestDTO modificarPlatoRequestDTO, String correoUsuario);
 }

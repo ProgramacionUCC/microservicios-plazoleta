@@ -27,8 +27,4 @@ public class PlatoRequestDTO {
 
     @NotNull(message = "El restaurante es obligatorio")
     private Integer idRestaurante;
-
-    // Quien esta creando el plato. En la HU-05 se reemplaza por el usuario del login.
-    @NotNull(message = "El id del propietario es obligatorio")
-    private Integer idPropietario;
 }
