@@ -11,22 +11,26 @@ import com.plazoleta.service.RestauranteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Reglas de negocio de la HU-02 (crear restaurante).
+ * El formato (nombre, NIT, telefono...) ya lo reviso el DTO.
+ */
 @Service
 @RequiredArgsConstructor
 public class RestauranteServiceImpl implements RestauranteService {
 
     private final RestauranteRepository restauranteRepository;
-    private final UsuarioRepository usuarioRepository;
+    private final UsuarioRepository usuarioRepository;  // Para buscar al propietario
 
-    // HU-02: el formato ya llega validado por el DTO
     @Override
     public RestauranteResponseDTO crearRestaurante(RestauranteRequestDTO dto) {
-        // 1. El NIT no se puede repetir (UNIQUE en la tabla)
+        // 1. El NIT no se puede repetir (es UNIQUE en la tabla)
         if (restauranteRepository.existsByNit(dto.getNit())) {
             throw new ReglaNegocioException("El NIT ya esta registrado");
         }
 
-        // 2. El id debe ser de un usuario que exista y tenga rol PROPIETARIO
+        // 2. La HU dice: el id debe corresponder a un usuario con rol PROPIETARIO.
+        //    findById devuelve un Optional: si no existe, orElseThrow lanza el error.
         Usuario propietario = usuarioRepository.findById(dto.getIdPropietario())
                 .orElseThrow(() -> new ReglaNegocioException("El propietario no existe"));
 
@@ -34,18 +38,19 @@ public class RestauranteServiceImpl implements RestauranteService {
             throw new ReglaNegocioException("El usuario no tiene rol PROPIETARIO");
         }
 
-        // 3. Se guarda el restaurante
+        // 3. Se arma la entity y se guarda en MySQL
         Restaurante restaurante = Restaurante.builder()
                 .nombre(dto.getNombre())
                 .nit(dto.getNit())
                 .direccion(dto.getDireccion())
                 .telefono(dto.getTelefono())
                 .urlLogo(dto.getUrlLogo())
-                .propietario(propietario)
+                .propietario(propietario)  // Se guarda el objeto; JPA pone el idPropietario
                 .build();
 
         Restaurante guardado = restauranteRepository.save(restaurante);
 
+        // 4. Se devuelve el DTO de respuesta
         return RestauranteResponseDTO.builder()
                 .id(guardado.getId())
                 .nombre(guardado.getNombre())
