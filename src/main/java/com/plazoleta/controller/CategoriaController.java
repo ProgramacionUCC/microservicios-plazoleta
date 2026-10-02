@@ -11,7 +11,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-// Las categorias se necesitan para crear platos (HU-03)
+/**
+ * Puerta de entrada para categorias (se necesitan para crear platos, HU-03).
+ * Cualquier usuario logueado puede usarlas (regla en SecurityConfig).
+ */
 @RestController
 @RequestMapping("/api/v1/categorias")
 @RequiredArgsConstructor
@@ -19,12 +22,14 @@ public class CategoriaController {
 
     private final CategoriaService categoriaService;
 
+    // POST http://localhost:8080/api/v1/categorias -> crea una categoria (201)
     @PostMapping
     public ResponseEntity<CategoriaResponseDTO> crearCategoria(@Valid @RequestBody CategoriaRequestDTO categoriaRequestDTO) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(categoriaService.crearCategoria(categoriaRequestDTO));
     }
 
+    // GET http://localhost:8080/api/v1/categorias -> lista todas (200)
     @GetMapping
     public ResponseEntity<List<CategoriaResponseDTO>> listarCategorias() {
         return ResponseEntity.ok(categoriaService.listarCategorias());
