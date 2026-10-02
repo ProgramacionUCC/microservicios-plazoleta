@@ -117,16 +117,126 @@ Ejemplo de lo que se envía:
 ### Para qué se hace así
 El formato se revisa en el DTO con anotaciones porque es más corto y fácil de leer. Las reglas que necesitan la base de datos o la fecha actual (correo repetido, mayoría de edad) quedan en el service. La clave nunca se guarda ni se devuelve en texto normal.
 
-> La regla "solo el administrador puede crear propietarios" se agrega en la HU-05 (login y permisos).
+> Desde la HU-05 este endpoint exige haber iniciado sesión como **ADMINISTRADOR**.
+
+## HU-02 Crear restaurante
+
+### Qué hace
+Permite que el administrador cree un restaurante y lo asocie a un propietario que ya existe.
+
+**Endpoint:** `POST /api/v1/restaurantes` (solo ADMINISTRADOR)
+
+```json
+{
+  "nombre": "El Corral",
+  "nit": "900123",
+  "direccion": "Calle 1 # 2-3",
+  "telefono": "+573001112233",
+  "urlLogo": "http://logo.png",
+  "idPropietario": 1
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`RestauranteRequestDTO`) revisa: todos los campos obligatorios, el nombre no puede ser solo números, el NIT solo números, el teléfono máximo 13 con `+` al inicio.
+2. **El service** (`RestauranteServiceImpl`) revisa que el NIT no esté repetido y que el `idPropietario` sea de un usuario que existe y tiene rol `PROPIETARIO`. Si todo está bien, lo guarda.
+
+### Para qué se hace así
+Para que no se creen restaurantes sin dueño o con un usuario que no es propietario.
+
+## HU-03 Crear plato
+
+### Qué hace
+Permite que el propietario cree platos en **su** restaurante. Cada plato pertenece a una categoría y nace activo.
+
+**Endpoint:** `POST /api/v1/platos` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "nombre": "Corral Clasica",
+  "precio": 25000,
+  "descripcion": "Carne y queso",
+  "urlImagen": "http://img.png",
+  "idCategoria": 1,
+  "idRestaurante": 1
+}
+```
+
+Las categorías se crean y consultan en `POST /api/v1/categorias` y `GET /api/v1/categorias` (como en el proyecto de la profe).
+
+### Cómo lo hace
+1. **El DTO** (`PlatoRequestDTO`) revisa: campos obligatorios y precio entero mayor a 0.
+2. **El service** (`PlatoServiceImpl`) revisa que el restaurante y la categoría existan y que el usuario logueado sea el dueño del restaurante.
+3. Guarda el plato con `estado = true` (activo).
+
+## HU-04 Modificar plato
+
+### Qué hace
+Permite que el propietario cambie **solo el precio y la descripción** de un plato de su restaurante.
+
+**Endpoint:** `PATCH /api/v1/platos/{idPlato}` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "precio": 30000,
+  "descripcion": "Carne, queso y tocineta"
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`ModificarPlatoRequestDTO`) solo tiene precio y descripción: los demás campos no se pueden mandar.
+2. **El service** revisa que el plato exista y que el usuario logueado sea el dueño del restaurante del plato. Si es de otro restaurante responde `403`.
+
+## HU-05 Agregar autenticación
+
+### Qué hace
+Todos los usuarios inician sesión con correo y clave. Al entrar reciben un **token** que deben enviar en cada petición. Cada endpoint solo lo puede usar el rol que corresponde.
+
+**Endpoint:** `POST /api/v1/auth/login` (libre)
+
+```json
+{ "correo": "admin@plazoleta.com", "clave": "..." }
+```
+
+Responde `{ "token": "eyJ..." }`. Ese token se manda en las demás peticiones en el header:
+`Authorization: Bearer eyJ...`
+
+El script de la base de datos trae un **administrador inicial** (el correo y la clave de prueba están en el comentario de `docs/script.sql`).
+
+### Cómo lo hace
+1. **`AuthServiceImpl`** busca el usuario por correo y compara la clave con la guardada en bcrypt. Si falla responde `401` con "Usuario no encontrado" o "Clave incorrecta". Los intentos son ilimitados.
+2. **`JwtService`** crea el token con el correo y el rol del usuario (dura 1 hora).
+3. **`JwtAuthenticationFilter`** lee el token en cada petición y deja al usuario como logueado con su rol.
+4. **`SecurityConfig`** dice quién puede usar cada endpoint:
+
+| Endpoint | Quién |
+|----------|-------|
+| `POST /api/v1/auth/login` | Cualquiera |
+| `POST /api/v1/usuarios/propietario` | ADMINISTRADOR |
+| `POST /api/v1/restaurantes` | ADMINISTRADOR |
+| `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
+| `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
+| Todo lo demás | Cualquier usuario logueado |
+
+5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario.
+
+### Respuestas de seguridad
+| Caso | Respuesta |
+|------|-----------|
+| Sin token o token alterado/vencido | `401` |
+| Logueado pero con un rol sin permiso | `403` |
+| Propietario intentando tocar platos de otro restaurante | `403` |
+
+> La validación de "crear empleado (solo propietario)" se agrega cuando se haga la HU-06 (Crear cuenta empleado), porque es ahí donde se crea ese endpoint.
 
 ## Estado actual
 
 | HU | Estado |
 |----|--------|
 | HU-01 Crear propietario | ✅ Migrada a Spring Boot |
-| HU-02 Crear restaurante | En migración |
-| HU-03 Crear plato | En migración |
-| HU-04 Modificar plato | En migración |
-| HU-05 Autenticación | En migración |
+| HU-02 Crear restaurante | ✅ Migrada a Spring Boot |
+| HU-03 Crear plato | ✅ Migrada a Spring Boot |
+| HU-04 Modificar plato | ✅ Migrada a Spring Boot |
+| HU-05 Autenticación | ✅ Migrada a Spring Boot |
 
-**Qué sigue:** migrar HU-02 a HU-05 y luego el sprint 2 (HU-06 a HU-12). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** sprint 2 (HU-06 a HU-12). Cada HU nueva agrega su parte aquí en este README.

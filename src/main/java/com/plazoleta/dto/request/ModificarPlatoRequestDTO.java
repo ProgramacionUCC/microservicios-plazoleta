@@ -15,8 +15,4 @@ public class ModificarPlatoRequestDTO {
 
     @NotBlank(message = "La descripcion es obligatoria")
     private String descripcion;
-
-    // Quien esta modificando el plato. En la HU-05 se reemplaza por el usuario del login.
-    @NotNull(message = "El id del propietario es obligatorio")
-    private Integer idPropietario;
 }

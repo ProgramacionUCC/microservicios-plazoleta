@@ -30,4 +30,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, String>> manejarReglaNegocio(ReglaNegocioException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("mensaje", ex.getMessage()));
     }
+
+    // Login con correo o clave incorrectos (HU-05)
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<Map<String, String>> manejarCredenciales(CredencialesInvalidasException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("mensaje", ex.getMessage()));
+    }
+
+    // Logueado pero sin permiso para esa accion (HU-05)
+    @ExceptionHandler(AccesoDenegadoException.class)
+    public ResponseEntity<Map<String, String>> manejarAccesoDenegado(AccesoDenegadoException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("mensaje", ex.getMessage()));
+    }
 }

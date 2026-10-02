@@ -156,4 +156,9 @@ INSERT INTO rol (nombre, descripcion) VALUES
     ('EMPLEADO', 'Atiende los pedidos del restaurante'),
     ('CLIENTE', 'Realiza pedidos');
 
--- Administrador inicial: PENDIENTE (falta el hash bcrypt de su clave)
+-- Administrador inicial (HU-05): sin el no se puede crear el primer propietario.
+-- Correo: admin@plazoleta.com  /  Clave de prueba: Admin123*
+-- La clave se guarda encriptada con bcrypt.
+INSERT INTO usuario (nombre, apellido, documentoDeIdentidad, celular, correo, clave, idRol) VALUES
+    ('Admin', 'Plazoleta', '1000000000', '+573000000000', 'admin@plazoleta.com',
+     '$2a$10$gM4H.YqcGCU7xDfBWExoeuPnIhNicnHbcnsGBCy87eYeHXiIzsgWa', 1);
