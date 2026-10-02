@@ -4,7 +4,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
-// Si el login es correcto se devuelve el token
+/**
+ * Respuesta del login: solo el token.
+ * Ese token se manda despues en cada peticion en el header:
+ *   Authorization: Bearer <token>
+ */
 @Getter
 @Setter
 @Builder
