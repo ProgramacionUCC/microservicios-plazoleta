@@ -1,5 +1,6 @@
 package com.plazoleta.controller;
 
+import com.plazoleta.dto.request.ModificarPlatoRequestDTO;
 import com.plazoleta.dto.request.PlatoRequestDTO;
 import com.plazoleta.dto.response.PlatoResponseDTO;
 import com.plazoleta.service.PlatoService;
@@ -21,5 +22,12 @@ public class PlatoController {
     public ResponseEntity<PlatoResponseDTO> crearPlato(@Valid @RequestBody PlatoRequestDTO platoRequestDTO) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(platoService.crearPlato(platoRequestDTO));
+    }
+
+    // HU-04: modificar precio y descripcion de un plato
+    @PatchMapping("/{idPlato}")
+    public ResponseEntity<PlatoResponseDTO> modificarPlato(@PathVariable Integer idPlato,
+                                                           @Valid @RequestBody ModificarPlatoRequestDTO modificarPlatoRequestDTO) {
+        return ResponseEntity.ok(platoService.modificarPlato(idPlato, modificarPlatoRequestDTO));
     }
 }
