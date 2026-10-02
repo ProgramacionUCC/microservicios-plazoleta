@@ -5,7 +5,10 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
-// HU-05: el login es con correo y clave
+/**
+ * Datos que llegan para iniciar sesion (HU-05).
+ * "El inicio de sesion es a traves de correo y clave."
+ */
 @Getter
 @Setter
 public class LoginRequestDTO {
