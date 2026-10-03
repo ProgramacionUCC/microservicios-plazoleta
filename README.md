@@ -214,6 +214,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `POST /api/v1/auth/login` | Cualquiera |
 | `POST /api/v1/usuarios/propietario` | ADMINISTRADOR |
 | `POST /api/v1/restaurantes` | ADMINISTRADOR |
+| `POST /api/v1/usuarios/empleado` | PROPIETARIO (dueño del restaurante) — HU-06 |
 | `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
 | Todo lo demás | Cualquier usuario logueado |
@@ -227,7 +228,51 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | Logueado pero con un rol sin permiso | `403` |
 | Propietario intentando tocar platos de otro restaurante | `403` |
 
-> La validación de "crear empleado (solo propietario)" se agrega cuando se haga la HU-06 (Crear cuenta empleado), porque es ahí donde se crea ese endpoint.
+> La validación de "crear empleado (solo propietario)" quedó lista con la HU-06.
+
+## HU-06 Crear cuenta empleado
+
+### Qué hace
+Permite que el propietario cree las cuentas de los empleados de **su** restaurante, para que puedan entrar al sistema y administrar los pedidos.
+
+**Endpoint:** `POST /api/v1/usuarios/empleado` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "nombre": "Pedro",
+  "apellido": "Lopez",
+  "documentoDeIdentidad": "11223344",
+  "celular": "+573001234567",
+  "correo": "pedro@mail.com",
+  "idRol": 3,
+  "clave": "pedro123",
+  "idRestaurante": 1
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `PROPIETARIO`.
+2. **El DTO** (`EmpleadoRequestDTO`) revisa los campos obligatorios de la HU (nombre, apellido, documento, celular, correo, idRol y clave) y el formato, igual que el propietario: correo válido, celular máximo 13 con `+`, documento numérico.
+3. **El service** (`UsuarioServiceImpl.crearEmpleado`) revisa en orden:
+   - Que el restaurante exista.
+   - Que el propietario que hizo login sea **el dueño** de ese restaurante (si no, `403`).
+   - Que el correo y el documento no estén registrados.
+   - Que el `idRol` sea el del rol `EMPLEADO` (si no, `400`).
+4. Guarda el usuario con la clave encriptada y rol `EMPLEADO`, y en la tabla `empleado_restaurante` guarda a qué restaurante pertenece. Las dos cosas se guardan juntas (`@Transactional`): si una falla, no se guarda ninguna.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con los datos del empleado y `"rol": "EMPLEADO"` |
+| Sin token | `401` |
+| Admin u otro rol que no es propietario | `403` |
+| Propietario que no es dueño del restaurante | `403` |
+| Campos vacíos o formato malo | `400` con el error de cada campo |
+| `idRol` distinto al de EMPLEADO | `400` |
+| Correo o documento repetido | `400` |
+
+### Para qué se hace así
+Se pide `idRestaurante` porque la HU dice "empleados **de su empresa**": hay que saber a qué restaurante pertenece. Esa relación la usa la HU-12 para que cada empleado vea solo los pedidos de su restaurante. El `idRol` se pide porque la HU lo lista como campo, y se valida que sea el de empleado porque la HU dice que "quedará con el rol de empleado".
 
 ## Estado actual
 
@@ -238,5 +283,6 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | HU-03 Crear plato | ✅ Migrada a Spring Boot |
 | HU-04 Modificar plato | ✅ Migrada a Spring Boot |
 | HU-05 Autenticación | ✅ Migrada a Spring Boot |
+| HU-06 Crear cuenta empleado | ✅ Sprint 2 |
 
-**Qué sigue:** sprint 2 (HU-06 a HU-12). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 2 (HU-07 a HU-12). Cada HU nueva agrega su parte aquí en este README.

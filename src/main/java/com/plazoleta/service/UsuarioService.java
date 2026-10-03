@@ -1,5 +1,6 @@
 package com.plazoleta.service;
 
+import com.plazoleta.dto.request.EmpleadoRequestDTO;
 import com.plazoleta.dto.request.PropietarioRequestDTO;
 import com.plazoleta.dto.response.UsuarioResponseDTO;
 
@@ -15,4 +16,8 @@ public interface UsuarioService {
 
     // HU-01: recibe los datos ya validados y devuelve el propietario creado
     UsuarioResponseDTO crearPropietario(PropietarioRequestDTO propietarioRequestDTO);
+
+    // HU-06: crea un empleado en un restaurante del propietario que hizo login.
+    // correoPropietario sale del token (es quien esta creando al empleado).
+    UsuarioResponseDTO crearEmpleado(EmpleadoRequestDTO empleadoRequestDTO, String correoPropietario);
 }

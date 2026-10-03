@@ -56,6 +56,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // "Creacion de propietario (solo administrador)"
                         .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/propietario").hasRole("ADMINISTRADOR")
+                        // "Creacion de empleado (solo propietario)" (HU-05 y HU-06)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/usuarios/empleado").hasRole("PROPIETARIO")
                         // "Creacion de restaurante (solo administrador)"
                         .requestMatchers(HttpMethod.POST, "/api/v1/restaurantes").hasRole("ADMINISTRADOR")
                         // "Creacion/modificacion de plato (solo propietario del restaurante)"
