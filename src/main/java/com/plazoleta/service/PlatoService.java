@@ -1,5 +1,6 @@
 package com.plazoleta.service;
 
+import com.plazoleta.dto.request.HabilitarPlatoRequestDTO;
 import com.plazoleta.dto.request.ModificarPlatoRequestDTO;
 import com.plazoleta.dto.request.PlatoRequestDTO;
 import com.plazoleta.dto.response.PlatoResponseDTO;
@@ -17,4 +18,7 @@ public interface PlatoService {
 
     // HU-04: modificar precio y descripcion
     PlatoResponseDTO modificarPlato(Integer idPlato, ModificarPlatoRequestDTO modificarPlatoRequestDTO, String correoUsuario);
+
+    // HU-07: habilitar/deshabilitar plato
+    PlatoResponseDTO cambiarEstadoPlato(Integer idPlato, HabilitarPlatoRequestDTO habilitarPlatoRequestDTO, String correoUsuario);
 }
