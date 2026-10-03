@@ -212,6 +212,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | Endpoint | Quién |
 |----------|-------|
 | `POST /api/v1/auth/login` | Cualquiera |
+| `POST /api/v1/usuarios/cliente` | Cualquiera (el cliente se registra solo) — HU-08 |
 | `POST /api/v1/usuarios/propietario` | ADMINISTRADOR |
 | `POST /api/v1/restaurantes` | ADMINISTRADOR |
 | `POST /api/v1/usuarios/empleado` | PROPIETARIO (dueño del restaurante) — HU-06 |
@@ -274,6 +275,38 @@ Permite que el propietario cree las cuentas de los empleados de **su** restauran
 ### Para qué se hace así
 Se pide `idRestaurante` porque la HU dice "empleados **de su empresa**": hay que saber a qué restaurante pertenece. Esa relación la usa la HU-12 para que cada empleado vea solo los pedidos de su restaurante. El `idRol` se pide porque la HU lo lista como campo, y se valida que sea el de empleado porque la HU dice que "quedará con el rol de empleado".
 
+## HU-08 Crear cuenta cliente
+
+### Qué hace
+Permite que un cliente cree su propia cuenta para poder entrar al sistema y hacer pedidos.
+
+**Endpoint:** `POST /api/v1/usuarios/cliente` (libre, sin iniciar sesión)
+
+```json
+{
+  "nombre": "Ana",
+  "apellido": "Gomez",
+  "documentoDeIdentidad": "99887766",
+  "celular": "+573009998877",
+  "correo": "ana@mail.com",
+  "clave": "ana123"
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`ClienteRequestDTO`) revisa los campos obligatorios de la HU (nombre, apellido, documento, celular, correo y clave) y el formato, igual que el propietario y el empleado.
+2. **El service** (`UsuarioServiceImpl.crearCliente`) revisa que el correo y el documento no estén registrados, encripta la clave y lo guarda con rol `CLIENTE`.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con los datos del cliente y `"rol": "CLIENTE"` |
+| Campos vacíos o formato malo | `400` con el error de cada campo |
+| Correo o documento repetido | `400` |
+
+### Para qué se hace así
+Es el único registro que no pide iniciar sesión: el cliente se crea su propia cuenta, así que todavía no tiene con qué entrar. No se pide rol ni fecha de nacimiento porque la HU-08 no los pide; el rol `CLIENTE` lo pone el sistema. La HU-11 (realizar pedido) usa esta cuenta.
+
 ## Estado actual
 
 | HU | Estado |
@@ -284,5 +317,6 @@ Se pide `idRestaurante` porque la HU dice "empleados **de su empresa**": hay que
 | HU-04 Modificar plato | ✅ Migrada a Spring Boot |
 | HU-05 Autenticación | ✅ Migrada a Spring Boot |
 | HU-06 Crear cuenta empleado | ✅ Sprint 2 |
+| HU-08 Crear cuenta cliente | ✅ Sprint 2 |
 
 **Qué sigue:** resto del sprint 2 (HU-07 a HU-12). Cada HU nueva agrega su parte aquí en este README.

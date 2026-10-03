@@ -1,5 +1,6 @@
 package com.plazoleta.service.impl;
 
+import com.plazoleta.dto.request.ClienteRequestDTO;
 import com.plazoleta.dto.request.EmpleadoRequestDTO;
 import com.plazoleta.dto.request.PropietarioRequestDTO;
 import com.plazoleta.dto.response.UsuarioResponseDTO;
@@ -135,6 +136,33 @@ public class UsuarioServiceImpl implements UsuarioService {
                 .build());
 
         return convertir(guardado);
+    }
+
+    /**
+     * HU-08: el cliente crea su propia cuenta.
+     * El formato ya lo reviso el DTO. Aqui solo falta revisar
+     * que no exista y guardarlo con el rol CLIENTE.
+     */
+    @Override
+    public UsuarioResponseDTO crearCliente(ClienteRequestDTO dto) {
+        // 1. Correo y documento no se pueden repetir
+        validarQueNoExista(dto.getCorreo(), dto.getDocumentoDeIdentidad());
+
+        // 2. "El usuario quedara registrado con el rol de cliente"
+        Rol rolCliente = buscarRol("CLIENTE");
+
+        // 3. Se guarda con la clave encriptada
+        Usuario cliente = Usuario.builder()
+                .nombre(dto.getNombre())
+                .apellido(dto.getApellido())
+                .documentoDeIdentidad(dto.getDocumentoDeIdentidad())
+                .celular(dto.getCelular())
+                .correo(dto.getCorreo())
+                .clave(passwordEncoder.encode(dto.getClave()))
+                .rol(rolCliente)
+                .build();
+
+        return convertir(usuarioRepository.save(cliente));
     }
 
     // Correo y documento son UNIQUE en la tabla usuario: si ya existen -> 400
