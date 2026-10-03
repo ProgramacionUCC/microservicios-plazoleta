@@ -1,5 +1,6 @@
 package com.plazoleta.service.impl;
 
+import com.plazoleta.dto.request.HabilitarPlatoRequestDTO;
 import com.plazoleta.dto.request.ModificarPlatoRequestDTO;
 import com.plazoleta.dto.request.PlatoRequestDTO;
 import com.plazoleta.dto.response.PlatoResponseDTO;
@@ -13,10 +14,12 @@ import com.plazoleta.repository.PlatoRepository;
 import com.plazoleta.repository.RestauranteRepository;
 import com.plazoleta.service.PlatoService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Reglas de negocio de platos: HU-03 (crear) y HU-04 (modificar).
+ * Reglas de negocio de platos: HU-03 (crear), HU-04 (modificar) y HU-07 (habilitar/deshabilitar).
  * El formato ya lo reviso el DTO; que el usuario tenga rol PROPIETARIO
  * ya lo reviso SecurityConfig. Aqui se revisa que sea EL DUEÑO.
  */
@@ -79,6 +82,27 @@ public class PlatoServiceImpl implements PlatoService {
     }
 
     /**
+     * HU-07: habilitar/deshabilitar plato. Solo cambia el estado; lo demas no se toca.
+     * El campo activo del DTO se guarda en Plato.estado.
+     */
+    @Override
+    public PlatoResponseDTO cambiarEstadoPlato(Integer idPlato, HabilitarPlatoRequestDTO dto, String correoUsuario) {
+        // 1. El plato debe existir (si no, 404). Se usa ResponseStatusException para no
+        // tocar el GlobalExceptionHandler ni cambiar el 400 de las otras HU.
+        Plato plato = platoRepository.findById(idPlato)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "El plato no existe"));
+
+        // 2. "No se permite modificar platos de otros restaurantes diferentes al propio"
+        validarDueno(plato.getRestaurante(), correoUsuario);
+
+        // 3. Se cambia SOLO el estado (true = activo, false = inactivo)
+        plato.setEstado(dto.getActivo());
+
+        // 4. save() sobre un plato que ya tiene id hace UPDATE (no crea uno nuevo)
+        return convertir(platoRepository.save(plato));
+    }
+
+    /**
      * Revisa que el usuario logueado sea el dueño del restaurante.
      * Compara el correo del token con el correo del propietario del restaurante.
      * Si no es el dueño -> 403 (AccesoDenegadoException).
@@ -89,7 +113,7 @@ public class PlatoServiceImpl implements PlatoService {
         }
     }
 
-    // Convierte la entity Plato en el DTO de respuesta (lo usan crear y modificar)
+    // Convierte la entity Plato en el DTO de respuesta (lo usan crear, modificar y cambiar estado)
     private PlatoResponseDTO convertir(Plato plato) {
         return PlatoResponseDTO.builder()
                 .id(plato.getId())
