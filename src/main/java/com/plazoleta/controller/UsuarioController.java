@@ -1,5 +1,6 @@
 package com.plazoleta.controller;
 
+import com.plazoleta.dto.request.ClienteRequestDTO;
 import com.plazoleta.dto.request.EmpleadoRequestDTO;
 import com.plazoleta.dto.request.PropietarioRequestDTO;
 import com.plazoleta.dto.response.UsuarioResponseDTO;
@@ -53,5 +54,16 @@ public class UsuarioController {
                                                             Authentication authentication) {
         return ResponseEntity.status(HttpStatus.CREATED)  // 201
                 .body(usuarioService.crearEmpleado(empleadoRequestDTO, authentication.getName()));
+    }
+
+    /**
+     * HU-08: el cliente crea su propia cuenta.
+     * POST http://localhost:8080/api/v1/usuarios/cliente
+     * Es libre (sin token): el cliente todavia no tiene cuenta para iniciar sesion.
+     */
+    @PostMapping("/cliente")
+    public ResponseEntity<UsuarioResponseDTO> crearCliente(@Valid @RequestBody ClienteRequestDTO clienteRequestDTO) {
+        return ResponseEntity.status(HttpStatus.CREATED)  // 201
+                .body(usuarioService.crearCliente(clienteRequestDTO));
     }
 }
