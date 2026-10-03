@@ -216,9 +216,10 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `POST /api/v1/restaurantes` | ADMINISTRADOR |
 | `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
+| `PATCH /api/v1/platos/{idPlato}/estado` | PROPIETARIO (dueño del restaurante) — HU-07 |
 | Todo lo demás | Cualquier usuario logueado |
 
-5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario.
+5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
 
 ### Respuestas de seguridad
 | Caso | Respuesta |
@@ -229,6 +230,38 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 
 > La validación de "crear empleado (solo propietario)" se agrega cuando se haga la HU-06 (Crear cuenta empleado), porque es ahí donde se crea ese endpoint.
 
+## HU-07 Habilitar/Deshabilitar plato
+
+### Qué hace
+Permite que el propietario active o desactive un plato de su restaurante para dejar de ofrecerlo sin borrarlo. Solo cambia el estado; el resto del plato queda igual.
+
+**Endpoint:** `PATCH /api/v1/platos/{idPlato}/estado` (solo PROPIETARIO dueño del restaurante, con Bearer Token JWT)
+
+```json
+{
+  "activo": false
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `PROPIETARIO`. Sin token o con token inválido/vencido responde `401`.
+2. **El DTO** (`HabilitarPlatoRequestDTO`) solo tiene el campo `activo` (`Boolean` obligatorio): los demás campos no se pueden mandar. Si el body viene mal responde `400`.
+3. **El service** (`PlatoServiceImpl.cambiarEstadoPlato`) busca el plato por `idPlato`; si no existe responde `404`. Luego reutiliza `validarDueno` y compara el correo del token con el del propietario del restaurante del plato; si no es el dueño responde `403`.
+4. Guarda el valor de `activo` en `Plato.estado` y devuelve el plato actualizado (`200`).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con el plato y su nuevo `estado` |
+| Plato que no existe | `404` `{"mensaje": "El plato no existe"}` |
+| Propietario de otro restaurante | `403` (no es el dueño del restaurante del plato) |
+| Logueado con rol sin permiso | `403` |
+| Sin token o token inválido/vencido | `401` |
+| Body sin `activo` o con formato malo | `400` con el error del campo |
+
+### Para qué se hace así
+El campo se llama `activo` en la petición porque así lo pide la HU, y se guarda en `Plato.estado` porque esa es la columna que ya existe en la base de datos (no se crea columna nueva). La validación de dueño se reutiliza (`validarDueno`, la misma de HU-03/HU-04) para no duplicar lógica y no tocar platos de otros restaurantes. El `404` usa `ResponseStatusException` para no cambiar el `400` que `ReglaNegocioException` devuelve en las otras HU.
+
 ## Estado actual
 
 | HU | Estado |
@@ -238,5 +271,6 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | HU-03 Crear plato | ✅ Migrada a Spring Boot |
 | HU-04 Modificar plato | ✅ Migrada a Spring Boot |
 | HU-05 Autenticación | ✅ Migrada a Spring Boot |
+| HU-07 Habilitar/Deshabilitar plato | ✅ Hecha en Spring Boot |
 
-**Qué sigue:** sprint 2 (HU-06 a HU-12). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 2 (HU-08 a HU-12). Cada HU nueva agrega su parte aquí en este README.
