@@ -219,6 +219,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{idPlato}/estado` | PROPIETARIO (dueño del restaurante) — HU-07 |
+| `GET /api/v1/restaurantes` | CLIENTE — HU-09 |
 | `GET /api/v1/platos` | CLIENTE — HU-10 |
 | `POST /api/v1/pedidos` | CLIENTE — HU-11 |
 | Todo lo demás | Cualquier usuario logueado |
@@ -433,6 +434,50 @@ Cumple las reglas de la HU: todos los platos de un mismo restaurante, cada uno c
 
 > La entity `Pedido` por ahora tiene estado, cliente y restaurante. Los demás campos de la tabla (empleado asignado y PIN) los agregan las HU que los usan (HU-12 en adelante).
 
+## HU-09 Listar restaurantes
+
+### Qué hace
+Permite que el cliente vea los restaurantes disponibles para elegir en cuál ordenar, por orden alfabético y por páginas. De cada restaurante muestra únicamente el nombre y el logo.
+
+**Endpoint:** `GET /api/v1/restaurantes` (solo CLIENTE)
+
+```
+GET /api/v1/restaurantes?pagina=0&tamano=10
+```
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos restaurantes por página | No (10) |
+
+Respuesta:
+```json
+{
+  "contenido": [ { "nombre": "El Corral", "urlLogo": "http://logo.png" } ],
+  "pagina": 0,
+  "tamano": 10,
+  "totalElementos": 3,
+  "totalPaginas": 1
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El service** (`RestauranteServiceImpl.listarRestaurantes`) revisa que la página sea 0 o mayor y que el tamaño sea 1 o mayor.
+3. **El repository** trae solo la página pedida con `findAll(Pageable)`, ordenada por `nombre` de la A a la Z.
+4. La respuesta usa `PaginaResponseDTO` (el mismo de la HU-10) y cada restaurante sale como `RestauranteListadoResponseDTO`, que solo tiene `nombre` y `urlLogo`.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los restaurantes de esa página y los totales |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Tamaño menor a 1 o página negativa | `400` |
+
+### Para qué se hace así
+El orden y la paginación los hace la base de datos (`Pageable` + `Sort`), así solo devuelve los restaurantes de la página pedida y no todos. El DTO trae solo 2 campos porque la HU dice que "deben ser únicamente: Nombre, UrlLogo".
+
 ## Estado actual
 
 | HU | Estado |
@@ -445,7 +490,8 @@ Cumple las reglas de la HU: todos los platos de un mismo restaurante, cada uno c
 | HU-06 Crear cuenta empleado | ✅ Sprint 2 |
 | HU-07 Habilitar/Deshabilitar plato | ✅ Hecha en Spring Boot |
 | HU-08 Crear cuenta cliente | ✅ Sprint 2 |
+| HU-09 Listar restaurantes | ✅ Sprint 2 |
 | HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
 | HU-11 Realizar pedido | ✅ Sprint 2 |
 
-**Qué sigue:** resto del sprint 2 (HU-09 a HU-12). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 2 (HU-12). Cada HU nueva agrega su parte aquí en este README.
