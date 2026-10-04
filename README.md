@@ -220,6 +220,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{idPlato}/estado` | PROPIETARIO (dueño del restaurante) — HU-07 |
 | `GET /api/v1/platos` | CLIENTE — HU-10 |
+| `POST /api/v1/pedidos` | CLIENTE — HU-11 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -389,6 +390,49 @@ Respuesta:
 ### Para qué se hace así
 Solo aparecen los platos activos, porque la HU-07 dice que desactivar un plato es para "dejar de ofrecer el producto en el menú". La paginación la hace Spring (`Pageable`), así la base de datos solo devuelve los platos de la página pedida y no todos.
 
+## HU-11 Realizar pedido
+
+### Qué hace
+Permite que el cliente haga un pedido con los platos que quiere de un restaurante, diciendo la cantidad de cada uno.
+
+**Endpoint:** `POST /api/v1/pedidos` (solo CLIENTE)
+
+```json
+{
+  "idRestaurante": 1,
+  "platos": [
+    { "idPlato": 1, "cantidad": 2 },
+    { "idPlato": 3, "cantidad": 1 }
+  ]
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El DTO** (`PedidoRequestDTO`) revisa que venga el restaurante, que haya al menos un plato y que cada cantidad sea mayor a 0.
+3. **El service** (`PedidoServiceImpl.crearPedido`) revisa en orden:
+   - Que el cliente no tenga ya un pedido `PENDIENTE`, `EN_PREPARACION` o `LISTO`.
+   - Que el restaurante exista.
+   - Que cada plato exista, sea **de ese restaurante** y esté **activo**.
+4. Primero revisa todos los platos y después guarda: el pedido con estado `PENDIENTE` (tabla `pedido`) y cada plato con su cantidad (tabla `plato_pedido`). Así, si un plato está mal, no queda nada guardado a medias.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con el pedido en estado `PENDIENTE` y sus platos |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Sin platos o cantidad 0 | `400` |
+| Restaurante o plato que no existe | `400` |
+| Plato de otro restaurante | `400` |
+| Plato desactivado | `400` |
+| Ya tiene un pedido en proceso | `400` |
+
+### Para qué se hace así
+Cumple las reglas de la HU: todos los platos de un mismo restaurante, cada uno con su cantidad, el pedido nace en `PENDIENTE` y un cliente solo puede tener un pedido en proceso a la vez. No se dejan pedir platos desactivados porque la HU-07 dice que desactivar un plato es dejar de ofrecerlo.
+
+> La entity `Pedido` por ahora tiene estado, cliente y restaurante. Los demás campos de la tabla (empleado asignado y PIN) los agregan las HU que los usan (HU-12 en adelante).
+
 ## Estado actual
 
 | HU | Estado |
@@ -402,5 +446,6 @@ Solo aparecen los platos activos, porque la HU-07 dice que desactivar un plato e
 | HU-07 Habilitar/Deshabilitar plato | ✅ Hecha en Spring Boot |
 | HU-08 Crear cuenta cliente | ✅ Sprint 2 |
 | HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
+| HU-11 Realizar pedido | ✅ Sprint 2 |
 
 **Qué sigue:** resto del sprint 2 (HU-09 a HU-12). Cada HU nueva agrega su parte aquí en este README.
