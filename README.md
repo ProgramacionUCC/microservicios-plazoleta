@@ -219,6 +219,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
 | `PATCH /api/v1/platos/{idPlato}/estado` | PROPIETARIO (dueño del restaurante) — HU-07 |
+| `GET /api/v1/platos` | CLIENTE — HU-10 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -340,6 +341,54 @@ Permite que el propietario active o desactive un plato de su restaurante para de
 ### Para qué se hace así
 El campo se llama `activo` en la petición porque así lo pide la HU, y se guarda en `Plato.estado` porque esa es la columna que ya existe en la base de datos (no se crea columna nueva). La validación de dueño se reutiliza (`validarDueno`, la misma de HU-03/HU-04) para no duplicar lógica y no tocar platos de otros restaurantes. El `404` usa `ResponseStatusException` para no cambiar el `400` que `ReglaNegocioException` devuelve en las otras HU.
 
+## HU-10 Listar los platos de un restaurante
+
+### Qué hace
+Permite que el cliente vea el menú de un restaurante, por páginas, escogiendo cuántos platos ver por página y, si quiere, filtrando por categoría.
+
+**Endpoint:** `GET /api/v1/platos` (solo CLIENTE)
+
+```
+GET /api/v1/platos?idRestaurante=1&pagina=0&tamano=5
+GET /api/v1/platos?idRestaurante=1&idCategoria=2&pagina=0&tamano=5
+```
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `idRestaurante` | De qué restaurante es el menú | Sí |
+| `idCategoria` | Filtrar por categoría | No |
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos platos por página | No (10) |
+
+Respuesta:
+```json
+{
+  "contenido": [ { "id": 1, "nombre": "Corral Clasica", "precio": 25000, "categoria": "Hamburguesas", ... } ],
+  "pagina": 0,
+  "tamano": 5,
+  "totalElementos": 12,
+  "totalPaginas": 3
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El service** (`PlatoServiceImpl.listarPlatos`) revisa que la página sea 0 o mayor, que el tamaño sea 1 o mayor y que el restaurante exista.
+3. **El repository** (`PlatoRepository`) trae solo la página pedida, con una búsqueda que Spring arma por el nombre del método: por restaurante, o por restaurante y categoría, y siempre solo platos activos.
+4. La respuesta usa `PaginaResponseDTO`, que sirve para cualquier lista paginada (también para la HU-09 y la HU-12).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los platos de esa página y los totales |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Tamaño menor a 1 o página negativa | `400` |
+| Restaurante que no existe | `400` |
+
+### Para qué se hace así
+Solo aparecen los platos activos, porque la HU-07 dice que desactivar un plato es para "dejar de ofrecer el producto en el menú". La paginación la hace Spring (`Pageable`), así la base de datos solo devuelve los platos de la página pedida y no todos.
+
 ## Estado actual
 
 | HU | Estado |
@@ -352,5 +401,6 @@ El campo se llama `activo` en la petición porque así lo pide la HU, y se guard
 | HU-06 Crear cuenta empleado | ✅ Sprint 2 |
 | HU-07 Habilitar/Deshabilitar plato | ✅ Hecha en Spring Boot |
 | HU-08 Crear cuenta cliente | ✅ Sprint 2 |
+| HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
 
 **Qué sigue:** resto del sprint 2 (HU-09 a HU-12). Cada HU nueva agrega su parte aquí en este README.
