@@ -1,6 +1,8 @@
 package com.plazoleta.service.impl;
 
 import com.plazoleta.dto.request.RestauranteRequestDTO;
+import com.plazoleta.dto.response.PaginaResponseDTO;
+import com.plazoleta.dto.response.RestauranteListadoResponseDTO;
 import com.plazoleta.dto.response.RestauranteResponseDTO;
 import com.plazoleta.entity.Restaurante;
 import com.plazoleta.entity.Usuario;
@@ -9,10 +11,14 @@ import com.plazoleta.repository.RestauranteRepository;
 import com.plazoleta.repository.UsuarioRepository;
 import com.plazoleta.service.RestauranteService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
- * Reglas de negocio de la HU-02 (crear restaurante).
+ * Reglas de negocio de restaurantes: HU-02 (crear) y HU-09 (listar para el cliente).
  * El formato (nombre, NIT, telefono...) ya lo reviso el DTO.
  */
 @Service
@@ -59,6 +65,43 @@ public class RestauranteServiceImpl implements RestauranteService {
                 .telefono(guardado.getTelefono())
                 .urlLogo(guardado.getUrlLogo())
                 .idPropietario(propietario.getId())
+                .build();
+    }
+
+    /**
+     * HU-09: restaurantes para el cliente, por orden alfabetico y paginados.
+     * "Se deben listar todos los restaurantes por orden alfabetico y paginados
+     * de acuerdo con un campo que permita especificar cuantos elementos por pagina"
+     */
+    @Override
+    public PaginaResponseDTO<RestauranteListadoResponseDTO> listarRestaurantes(int pagina, int tamano) {
+        // 1. Los datos de la pagina deben tener sentido (igual que en HU-10)
+        if (pagina < 0) {
+            throw new ReglaNegocioException("La pagina debe ser 0 o mayor");
+        }
+        if (tamano < 1) {
+            throw new ReglaNegocioException("El tamano de pagina debe ser 1 o mayor");
+        }
+
+        // 2. PageRequest dice que pagina y cuantos restaurantes traer.
+        //    Se ordena por nombre para que salgan de la A a la Z.
+        Pageable paginacion = PageRequest.of(pagina, tamano, Sort.by("nombre").ascending());
+
+        // 3. findAll(Pageable) ya viene de JpaRepository: trae solo esa pagina + los totales
+        Page<Restaurante> restaurantes = restauranteRepository.findAll(paginacion);
+
+        // 4. Se arma la respuesta: solo nombre + urlLogo por restaurante, mas los totales
+        return PaginaResponseDTO.<RestauranteListadoResponseDTO>builder()
+                .contenido(restaurantes.getContent().stream()
+                        .map(r -> RestauranteListadoResponseDTO.builder()
+                                .nombre(r.getNombre())
+                                .urlLogo(r.getUrlLogo())
+                                .build())
+                        .toList())
+                .pagina(restaurantes.getNumber())
+                .tamano(restaurantes.getSize())
+                .totalElementos(restaurantes.getTotalElements())
+                .totalPaginas(restaurantes.getTotalPages())
                 .build();
     }
 }
