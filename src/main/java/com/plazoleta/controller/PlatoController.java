@@ -3,6 +3,7 @@ package com.plazoleta.controller;
 import com.plazoleta.dto.request.HabilitarPlatoRequestDTO;
 import com.plazoleta.dto.request.ModificarPlatoRequestDTO;
 import com.plazoleta.dto.request.PlatoRequestDTO;
+import com.plazoleta.dto.response.PaginaResponseDTO;
 import com.plazoleta.dto.response.PlatoResponseDTO;
 import com.plazoleta.service.PlatoService;
 import jakarta.validation.Valid;
@@ -13,8 +14,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Puerta de entrada para platos (HU-03, HU-04 y HU-07).
- * Solo PROPIETARIO puede entrar (regla en SecurityConfig).
+ * Puerta de entrada para platos (HU-03, HU-04, HU-07 y HU-10).
+ * Crear, modificar y habilitar: solo PROPIETARIO. Listar el menu: solo CLIENTE.
+ * (reglas en SecurityConfig)
  */
 @RestController
 @RequestMapping("/api/v1/platos")
@@ -68,5 +70,23 @@ public class PlatoController {
                                                               Authentication authentication) {
         return ResponseEntity.ok(  // 200
                 platoService.cambiarEstadoPlato(idPlato, habilitarPlatoRequestDTO, authentication.getName()));
+    }
+
+    /**
+     * HU-10: el cliente ve el menu de un restaurante, paginado y con filtro opcional por categoria.
+     * GET http://localhost:8080/api/v1/platos?idRestaurante=1&idCategoria=2&pagina=0&tamano=5
+     * Solo CLIENTE (regla en SecurityConfig).
+     *
+     * @RequestParam toma los datos que vienen despues del "?" en la URL.
+     *  - required = false: se puede omitir (idCategoria: sin filtro).
+     *  - defaultValue: valor si no se manda (pagina 0, 10 platos por pagina).
+     */
+    @GetMapping
+    public ResponseEntity<PaginaResponseDTO<PlatoResponseDTO>> listarPlatos(@RequestParam Integer idRestaurante,
+                                                                            @RequestParam(required = false) Integer idCategoria,
+                                                                            @RequestParam(defaultValue = "0") int pagina,
+                                                                            @RequestParam(defaultValue = "10") int tamano) {
+        return ResponseEntity.ok(  // 200
+                platoService.listarPlatos(idRestaurante, idCategoria, pagina, tamano));
     }
 }
