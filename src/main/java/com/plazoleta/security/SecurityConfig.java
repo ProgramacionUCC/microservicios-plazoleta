@@ -66,6 +66,8 @@ public class SecurityConfig {
                         // Aqui se revisa el ROL; que sea EL DUEÑO lo revisa PlatoServiceImpl.
                         .requestMatchers(HttpMethod.POST, "/api/v1/platos").hasRole("PROPIETARIO")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/platos/**").hasRole("PROPIETARIO")
+                        // HU-10: "Yo como cliente... necesito listar el menu de cada restaurante"
+                        .requestMatchers(HttpMethod.GET, "/api/v1/platos").hasRole("CLIENTE")
                         // "Exponer mis servicios solo a usuarios logueados": todo lo demas pide token
                         .anyRequest().authenticated()
                 )
