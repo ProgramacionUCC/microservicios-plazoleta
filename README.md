@@ -222,6 +222,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `GET /api/v1/restaurantes` | CLIENTE — HU-09 |
 | `GET /api/v1/platos` | CLIENTE — HU-10 |
 | `POST /api/v1/pedidos` | CLIENTE — HU-11 |
+| `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -478,6 +479,51 @@ Respuesta:
 ### Para qué se hace así
 El orden y la paginación los hace la base de datos (`Pageable` + `Sort`), así solo devuelve los restaurantes de la página pedida y no todos. El DTO trae solo 2 campos porque la HU dice que "deben ser únicamente: Nombre, UrlLogo".
 
+## HU-12 Listar pedidos por estado (empleado)
+
+### Qué hace
+Permite que el empleado vea los pedidos de **su** restaurante filtrados por estado, por páginas, para elegir a cuál cambiarle el estado. Cada pedido sale con todos sus campos y sus platos.
+
+**Endpoint:** `GET /api/v1/pedidos?estado=PENDIENTE&pagina=0&tamano=10` (solo EMPLEADO)
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `estado` | Filtrar por estado: PENDIENTE, EN_PREPARACION, LISTO, ENTREGADO o CANCELADO (en mayúsculas) | Sí |
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos pedidos por página | No (10) |
+
+Solo salen los pedidos del restaurante al que pertenece el empleado (se saca de la tabla `empleado_restaurante` con el correo del token), ordenados por id. Cada pedido trae sus platos (`idPlato`, `nombre`, `cantidad`).
+
+Ejemplo de respuesta real (empleado Juan, restaurante 1):
+```json
+{"contenido":[{"id":1,"estado":"PENDIENTE","idRestaurante":1,"platos":[{"idPlato":1,"nombre":"Corral Clasica","cantidad":2}]}],"pagina":0,"tamano":10,"totalElementos":1,"totalPaginas":1}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `EMPLEADO`.
+2. **El service** (`PedidoServiceImpl.listarPedidosPorEstado`) busca al empleado por el correo del token y luego su restaurante en `empleado_restaurante` (el método que la HU-06 dejó listo para la HU-12). Si no tiene restaurante asignado responde `403`.
+3. Revisa que el `estado` sea uno válido (en mayúsculas) y que la página y el tamaño tengan sentido.
+4. **El repository** (`PedidoRepository`) trae solo la página pedida de **ese restaurante** con ese estado, ordenada por id.
+5. La respuesta usa `PaginaResponseDTO` (el mismo de HU-09 y HU-10) y cada pedido sale completo: id, estado, restaurante y sus platos con cantidad.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los pedidos de esa página y los totales |
+| Estado inválido, en minúscula o sin estado | `400` `{"mensaje": "El estado debe ser uno de: PENDIENTE, EN_PREPARACION, LISTO, ENTREGADO, CANCELADO"}` |
+| Página negativa | `400` `{"mensaje": "La pagina debe ser 0 o mayor"}` |
+| Tamaño menor a 1 | `400` `{"mensaje": "El tamano de pagina debe ser 1 o mayor"}` |
+| Sin token | `401` |
+| CLIENTE, ADMINISTRADOR o PROPIETARIO | `403` |
+| Empleado sin restaurante asignado | `403` |
+
+Casos probados en Postman: pendientes del empleado, aislamiento (el empleado de otro restaurante recibe contenido vacío), otro estado (vacío), paginado con `tamano=1`, página vacía, estado inválido, estado en minúscula, sin estado, página negativa, tamaño cero, sin token (`401`), cliente/admin/propietario (`403`).
+
+> Nota: aún no existe endpoint para cambiar el estado de un pedido, por eso en las pruebas todos los pedidos están en PENDIENTE y los demás estados devuelven lista vacía.
+
+### Para qué se hace así
+El restaurante no se pide en la URL porque sale del empleado que hizo login: así "solo se pueden listar los pedidos del restaurante al que pertenece el empleado" sin que pueda espiar los de otros. El filtro por estado permite al empleado enfocarse (ej. solo `PENDIENTE`) para decidir cuál atender.
+
 ## Estado actual
 
 | HU | Estado |
@@ -493,5 +539,6 @@ El orden y la paginación los hace la base de datos (`Pageable` + `Sort`), así 
 | HU-09 Listar restaurantes | ✅ Sprint 2 |
 | HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
 | HU-11 Realizar pedido | ✅ Sprint 2 |
+| HU-12 Listar pedidos por estado (empleado) | ✅ Sprint 2 |
 
-**Qué sigue:** resto del sprint 2 (HU-12). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** sprint 3 (HU-13 a HU-18). Cada HU nueva agrega su parte aquí en este README.
