@@ -1,4 +1,4 @@
-# Plazoleta de Comidas — Microservicios
+# Plazoleta de Comidas — Spring Boot
 
 Proyecto de plazoleta donde cada parte funciona por separado y se hablan entre sí. La idea es que el sistema crezca sin enredarse.
 
@@ -6,177 +6,539 @@ Proyecto de plazoleta donde cada parte funciona por separado y se hablan entre s
 
 ## Qué hace el proyecto
 
-Una plazoleta con restaurantes. Un administrador registra a los dueños de los restaurantes, esos dueños luego podrán manejar su local, y más adelante los clientes harán pedidos que pasan por varios estados hasta entregarse. Todo está dividido en 4 piezas pequeñas para que cada una haga solo lo suyo.
+Una plazoleta con restaurantes. Un administrador registra a los dueños de los restaurantes, esos dueños manejan su local y sus platos, y los clientes hacen pedidos que pasan por varios estados hasta entregarse.
 
-## Qué hay hecho hasta ahora — HU-01 Crear propietario
+El sistema se divide en 4 partes (microservicios), organizadas dentro de un solo proyecto:
 
-### Qué hace
-Permite que el administrador cree la cuenta de un propietario. Es el primer paso, sin esto no se pueden crear restaurantes después.
+| Parte | Qué resuelve |
+|-------|--------------|
+| **Usuarios** | Crear cuentas, login, claves con bcrypt y permisos por rol |
+| **Plazoleta** | Restaurantes, platos y pedidos |
+| **Trazabilidad** | Estados del pedido e historial |
+| **Notificaciones** | Aviso al cliente con PIN cuando el pedido está listo |
 
-### Cómo lo hace
-Cuando se quiere guardar un propietario, el sistema hace 4 pasos seguidos:
+## Migración a Spring Boot
 
-1. **Revisa que todo esté lleno** — nombre, apellido, documento, celular, fecha de nacimiento, correo y clave no pueden venir vacíos.
-2. **Revisa que todo tenga buen formato** — el correo debe parecer un correo, el celular no puede pasar de 13 caracteres y solo lleva números y + al inicio, el documento solo lleva números y la persona debe ser mayor de 18 años.
-3. **Protege la clave** — no guarda la clave tal cual, la transforma en un código irreconocible que no se puede volver a leer. Así si alguien ve la base de datos no ve las claves reales.
-4. **Lo guarda** — lo deja en una lista en memoria. Más adelante esa lista será una base de datos, pero el resto del código no tendrá que cambiar.
+En el sprint 1 el proyecto se hizo en **Java puro** (datos en listas en memoria y pruebas con `Main.java`). Ahora se pasó a **Spring Boot**:
 
-### Para qué se hace así
-Para que el código sea fácil de entender y de probar. Cada paso está separado, si algo falla se sabe exactamente dónde fue. Y para que desde el inicio las claves estén protegidas y los datos estén bien.
+- Los datos se guardan en **MySQL**, ya no se pierden al cerrar.
+- Cada funcionalidad es un **endpoint** que se prueba desde Postman.
+- Las validaciones de formato se hacen con **anotaciones** en los DTO (`@NotBlank`, `@Email`, `@Pattern`...), en vez de muchos `if`.
+- El código de Java puro sigue guardado en el historial de Git (ramas del sprint 1 y `main`).
 
-## Qué hay hecho hasta ahora — HU-02 Crear restaurante
+## Cómo correr el proyecto
 
-### Qué hace
-Permite crear un restaurante y asociarlo a un propietario ya existente. Sin un propietario válido no se puede crear el restaurante.
-
-### Cómo lo hace
-Cuando se quiere guardar un restaurante, el sistema hace validaciones en orden en `RestauranteService.java:17`:
-
-1. **Revisa que todo esté lleno** — nombre, NIT, dirección, teléfono, urlLogo e idPropietario son obligatorios.
-2. **Revisa el nombre** — no puede ser solo números (ej: `123` → error, `La Plazoleta` → ok).
-3. **Revisa el NIT** — debe ser solo números.
-4. **Revisa el teléfono** — solo números, puede empezar con `+` y máximo 13 caracteres en total (ej: `+573005698325`).
-5. **Revisa el propietario** — el `idPropietario` debe coincidir con el `documentoDeIdentidad` de un usuario ya guardado con rol `PROPIETARIO` en `PropietarioRepository.java:14`.
-6. **Lo guarda** — si todo pasa, lo deja en una lista en memoria en `RestauranteRepository.java:7`.
-
-### Para qué se hace así
-Para que no se creen restaurantes falsos o sin dueño, y para que el dato del teléfono y NIT siempre tenga formato correcto. Además, al validar contra el repositorio de propietarios se asegura la relación entre las dos piezas (Usuarios y Plazoleta) sin acoplarlas.
-
-## Qué hay hecho hasta ahora — HU-03 Crear plato
-
-### Qué hace
-Permite que el propietario de su restaurante cree platos dentro de ese restaurante. Cada plato nace activo y queda asociado al restaurante por su NIT.
-
-### Cómo lo hace
-Cuando se quiere guardar un plato, el sistema hace validaciones en orden en `PlatoService.java:19`:
-
-1. **Revisa que todo esté lleno** — nombre, descripción, urlImagen, categoría e idRestaurante son obligatorios; además el precio debe venir (se valida aparte).
-2. **Revisa el precio** — debe ser un número entero positivo mayor a 0 (`0` o negativo → error).
-3. **Revisa que el restaurante exista** — busca el restaurante por NIT con `RestauranteRepository.java:22` `obtenerPorNit`. Si no existe → error.
-4. **Revisa que sea el dueño** — el `idPropietarioAutenticado` (simula el usuario logueado hasta que exista HU-05) debe coincidir con el `idPropietario` del restaurante en `Restaurante.java:42`. Si no es el dueño → error.
-5. **Lo guarda** — si todo pasa, lo deja en una lista en memoria en `PlatoRepository.java:8` y el plato queda con `activo = true` por defecto en `Plato.java:20`.
-
-### Para qué se hace así
-Para que nadie pueda crear platos en un restaurante que no existe o que no le pertenece, y para que el precio nunca quede en cero o negativo. Al usar el NIT como `idRestaurante` en `Plato.java:10` se mantiene la relación simple entre Plazoleta y Restaurante sin acoplar módulos.
-
-## Qué hay hecho hasta ahora — HU-04 Modificar plato
-
-### Qué hace
-Permite que el propietario actualice **solo el precio y la descripción** de un plato que ya existe en su restaurante. Sirve para corregir valores errados o actualizar precios sin tener que borrar y volver a crear el plato.
-
-### Cómo lo hace
-Cuando se quiere modificar un plato, el sistema hace validaciones en orden en `PlatoService.java:50`:
-
-1. **Revisa que nada venga vacío** — nombre del plato, NIT del restaurante, nueva descripción y propietario son obligatorios.
-2. **Revisa el precio** — debe ser entero positivo mayor a 0 (`0` o negativo → error).
-3. **Revisa que el restaurante exista** — busca por NIT con `RestauranteRepository.java:22` `obtenerPorNit`. Si no existe → error.
-4. **Revisa que sea el dueño** — el `idPropietarioAutenticado` debe coincidir con el `idPropietario` del restaurante. Si no es el dueño → error.
-5. **Revisa que el plato exista** — lo busca por nombre + NIT en `PlatoRepository.java:15` `obtenerTodos()`. Si no existe en ese restaurante → error.
-6. **Lo actualiza** — solo hace `setPrecio` y `setDescripcion` en `Plato.java:50`, el resto (nombre, categoría, urlImagen, activo) no se toca.
-
-### Para qué se hace así
-Para que nadie pueda cambiar precios de un restaurante que no le pertenece y para que no se puedan modificar otros campos por error. Al cambiar solo dos setters se respeta el checklist del Trello y se mantiene la regla de negocio simple y segura.
-
-## Qué hay hecho hasta ahora — HU-05 Agregar autenticación al sistema
-
-### Qué hace
-Permite que cualquier usuario (administrador, cliente, propietario o empleado) inicie sesión con correo y clave y que cada endpoint solo lo use quien tiene el rol correcto. Es la capa que protege todo lo anterior.
-
-### Cómo lo hace
-Cuando se quiere iniciar sesión, el sistema hace validaciones en orden en `AutenticacionService.java:17`:
-
-1. **Revisa que correo y clave no vengan vacíos** — ambos son obligatorios.
-2. **Busca el usuario por correo** — recorre `PropietarioRepository.java:14` `getPropietarios()`. Si no existe → error “Usuario no encontrado”.
-3. **Valida la contraseña** — compara la clave escrita con la guardada encriptada usando `BCrypt.checkpw`. Si no coincide → error “Contraseña incorrecta”.
-4. **No limita intentos** — cada fallo solo informa, sin bloquear, para que pueda reintentar ilimitadamente.
-5. **Garantiza permisos** — con `tienePermiso(usuario, rolRequerido)` en `AutenticacionService.java:46` verifica que `usuario.getRol()` coincida con el rol necesario.
-
-Y luego cada endpoint exige estar autenticado en `HU-05`:
-
-* **Crear propietario (solo ADMINISTRADOR)** en `PropietarioService.java:38` `registrarPropietario(prop, admin)` — si `admin` es null o no tiene rol `ADMINISTRADOR` → error. Mantiene sobrecarga sin auth para bootstrap inicial. `Propietario.java:16` ahora permite rol `ADMINISTRADOR` vía constructor `Propietario(..., rol)` y `setRol`.
-* **Crear restaurante (solo ADMINISTRADOR)** en `RestauranteService.java:62` `crearRestaurante(rest, admin)` — valida `ADMINISTRADOR` antes de crear. El método sin auth sigue existiendo para pruebas previas.
-* **Crear empleado (solo PROPIETARIO dueño)** en `EmpleadoService.java:22` `crearEmpleado(empleado, propietario)` — valida que `propietario` tenga rol `PROPIETARIO`, que el restaurante exista vía `RestauranteRepository.java:22` `obtenerPorNit` y que `restaurante.getIdPropietario()` coincida con `propietario.getDocumentoDeIdentidad()`. Valida obligatorios/formato y encripta clave con `BCrypt`.
-* **Crear/modificar plato (solo PROPIETARIO dueño)** en `PlatoService.java:48` `crearPlato(plato, Propietario)` y `PlatoService.java:68` `modificarPlato(..., Propietario)` — validan `PROPIETARIO` y delegan al método legacy con `String` que ya valida dueño. Si no es dueño o no tiene rol → error.
-
-### Para qué se hace así
-Para que no baste con saberse un documento o NIT suelto: ahora se exige el carnet completo del usuario logueado (`Propietario` con `rol` y `documento`). Al centralizar login y `tienePermiso` en `AutenticacionService` se protege cada endpoint desde un solo lugar y se evita que un cliente o admin cree platos/empleados que no le corresponden.
+1. Tener **Java 25** y **MySQL 8** (usuario `root`, clave `root`).
+2. Correr el script de la base de datos `docs/script.sql` en MySQL (crea `plazoleta_db`, todas las tablas y los 4 roles).
+3. Abrir el proyecto en IntelliJ como proyecto **Maven** y correr `PlazoletaApplication`.
+   O desde la terminal: `./mvnw spring-boot:run`
+4. El proyecto queda en `http://localhost:8080`.
 
 ## Cómo está organizado el código
 
 ```
-src/
-  Main.java                          → ejemplo de uso, crea propietario, restaurante, platos, modifica plato, prueba login y validación por endpoint HU-05
-  model/Propietario.java             → solo guarda datos, ahora con soporte para rol ADMINISTRADOR/PROPIETARIO (constructor con rol y setRol)
-  model/Restaurante.java             → solo guarda los datos del restaurante (6 campos)
-  model/Plato.java                   → solo guarda los datos del plato (6 campos + activo, nace en true)
-  model/Empleado.java                → solo guarda datos del empleado (8 campos, rol EMPLEADO, idRestaurante)
-  service/PropietarioService.java    → revisa y guarda propietarios, ahora con sobrecarga que exige ADMINISTRADOR
-  service/RestauranteService.java    → revisa y guarda restaurantes, ahora con sobrecarga que exige ADMINISTRADOR
-  service/PlatoService.java          → revisa y guarda/modifica platos, ahora con sobrecarga que exige PROPIETARIO dueño (Propietario autenticado)
-  service/EmpleadoService.java       → revisa y guarda empleados, solo PROPIETARIO dueño del restaurante puede
-  service/AutenticacionService.java  → deja entrar con correo/clave, valida BCrypt, intentos ilimitados y tienePermiso por rol (HU-05)
-  repository/PropietarioRepository.java → cajón de propietarios
-  repository/RestauranteRepository.java → cajón de restaurantes (con obtenerPorNit)
-  repository/PlatoRepository.java    → cajón de platos
-  repository/EmpleadoRepository.java → cajón de empleados
-  org/mindrot/BCrypt.java            → herramienta que protege las claves
+src/main/java/com/plazoleta/
+  PlazoletaApplication.java   → arranca el proyecto (reemplaza al Main.java)
+  controller/                 → las puertas de entrada: reciben la petición y responden
+  dto/request/                → lo que llega en la petición, con sus reglas de formato
+  dto/response/               → lo que se devuelve (nunca la clave)
+  entity/                     → las fichas que se guardan en las tablas de MySQL
+  repository/                 → guardan y buscan en MySQL (Spring hace el trabajo)
+  service/ + service/impl/    → las reglas de negocio de cada HU
+  exception/                  → convierte los errores en mensajes claros
+  security/                   → bcrypt para las claves (y el login en HU-05)
+src/main/resources/
+  application.properties      → conexión a MySQL
+docs/script.sql               → base de datos completa (HU-01 a HU-18)
 ```
 
-- **model** es la ficha con los datos.
-- **service** es el que piensa y decide si todo está bien.
-- **repository** es el que solo guarda, no pregunta nada.
+- **dto** revisa que los datos vengan bien escritos.
+- **service** piensa y decide si se cumplen las reglas de la HU.
+- **repository** solo guarda y busca, no pregunta nada.
 
-## Reglas que ya están funcionando
+## Base de datos
 
-### HU-01 Propietario
-- No se puede crear un propietario si falta algún dato.
-- El correo debe tener forma de correo.
-- El celular máximo 13 caracteres, solo números y +.
-- El documento solo números.
-- Debe ser mayor de edad.
-- Todo propietario que se crea queda automáticamente con el rol `PROPIETARIO`.
+El script `docs/script.sql` crea de una vez todas las tablas que necesitan las HU del proyecto:
 
-### HU-02 Restaurante
-- Todos los campos son obligatorios: nombre, NIT, dirección, teléfono, urlLogo e idPropietario.
-- El nombre no puede ser solo números.
-- El NIT debe ser solo numérico.
-- El teléfono máximo 13, solo números y `+` opcional al inicio.
-- El `idPropietario` debe existir en `PropietarioRepository` y tener rol `PROPIETARIO`.
+| Tabla | Para qué | HU |
+|-------|----------|----|
+| `rol` | Los 4 roles: ADMINISTRADOR, PROPIETARIO, EMPLEADO, CLIENTE | 01, 06, 08 |
+| `usuario` | Todas las personas; lo que cambia es el rol | 01, 06, 08 |
+| `restaurante` | Restaurantes y su propietario | 02 |
+| `categoria` | Categoría de cada plato | 03, 10 |
+| `plato` | Platos del menú (precio entero, activo por defecto) | 03, 04, 07, 10 |
+| `empleado_restaurante` | A qué restaurante pertenece cada empleado | 06, 12, 13 |
+| `pedido` | Pedidos, su estado y el PIN de entrega | 11 a 16 |
+| `plato_pedido` | Platos de cada pedido y su cantidad | 11 |
+| `trazabilidad` | Cada cambio de estado de un pedido con su fecha | 17, 18 |
 
-### HU-03 Plato
-- Todos los campos son obligatorios: nombre, precio, descripción, urlImagen, categoría e idRestaurante (NIT).
-- El precio debe ser entero positivo mayor a 0.
-- El `idRestaurante` debe existir en `RestauranteRepository` vía `obtenerPorNit`.
-- Solo el propietario dueño del restaurante (`Restaurante.getIdPropietario() == idPropietarioAutenticado`) puede crear platos en él.
-- Todo plato se crea con `activo = true` por defecto.
+## HU-01 Crear propietario
 
-### HU-04 Modificar plato
-- Solo se pueden modificar **precio y descripción**, los demás campos no se tocan.
-- El precio debe ser entero positivo mayor a 0, la descripción no puede venir vacía.
-- El restaurante debe existir (`obtenerPorNit`) y el plato debe existir en ese restaurante (nombre + NIT).
-- Solo el propietario dueño del restaurante puede modificarlo (`Restaurante.getIdPropietario() == idPropietarioAutenticado`).
-- No se permiten modificar platos de otros restaurantes diferentes al propio.
+### Qué hace
+Permite crear la cuenta de un propietario. Es el primer paso: sin propietario no se pueden crear restaurantes después.
 
-### HU-05 Autenticación
-- Inicio de sesión con **correo y clave** en `AutenticacionService.java:19`.
-- Valida que el usuario exista y que la contraseña sea correcta (compara con `BCrypt.checkpw`).
-- Número de intentos ilimitado (no bloquea, solo informa error cada vez).
-- `tienePermiso(usuario, rol)` en `AutenticacionService.java:46` centraliza la verificación por rol.
-- **Crear propietario** solo `ADMINISTRADOR` en `PropietarioService.java:38`.
-- **Crear restaurante** solo `ADMINISTRADOR` en `RestauranteService.java:62`.
-- **Crear empleado** solo `PROPIETARIO` dueño del restaurante en `EmpleadoService.java:22` (valida restaurante existe y dueño, encripta clave).
-- **Crear/modificar plato** solo `PROPIETARIO` dueño en `PlatoService.java:48` y `68` (sobrecarga con `Propietario` autenticado).
+**Endpoint:** `POST /api/v1/usuarios/propietario`
+
+Ejemplo de lo que se envía:
+```json
+{
+  "nombre": "Carlos",
+  "apellido": "Perez",
+  "documentoDeIdentidad": "12345678",
+  "celular": "+573005698325",
+  "fechaDeNacimiento": "1990-05-10",
+  "correo": "carlos@mail.com",
+  "clave": "clave123"
+}
+```
+
+### Cómo lo hace
+1. **El controller** (`UsuarioController`) recibe la petición. Con `@Valid` pide revisar el DTO antes de seguir.
+2. **El DTO** (`PropietarioRequestDTO`) revisa el formato con anotaciones:
+   - Todos los campos son obligatorios.
+   - El correo debe tener forma de correo.
+   - El celular máximo 13 caracteres, solo números y `+` al inicio.
+   - El documento solo números.
+3. **El service** (`UsuarioServiceImpl`) revisa las reglas en 4 pasos:
+   - Que el correo y el documento no estén ya registrados.
+   - Que sea mayor de edad (18 años o más).
+   - Le pone el rol `PROPIETARIO`.
+   - Encripta la clave con bcrypt y lo guarda en MySQL.
+4. **Si algo falla**, `GlobalExceptionHandler` responde un mensaje claro con código 400.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con los datos del propietario y su rol (sin la clave) |
+| Correo repetido | `400` `{"mensaje": "El correo ya esta registrado"}` |
+| Menor de edad | `400` `{"mensaje": "El propietario debe ser mayor de edad"}` |
+| Formato malo | `400` con cada campo y su error, ej: `{"correo": "El correo no es valido"}` |
+
+### Para qué se hace así
+El formato se revisa en el DTO con anotaciones porque es más corto y fácil de leer. Las reglas que necesitan la base de datos o la fecha actual (correo repetido, mayoría de edad) quedan en el service. La clave nunca se guarda ni se devuelve en texto normal.
+
+> Desde la HU-05 este endpoint exige haber iniciado sesión como **ADMINISTRADOR**.
+
+## HU-02 Crear restaurante
+
+### Qué hace
+Permite que el administrador cree un restaurante y lo asocie a un propietario que ya existe.
+
+**Endpoint:** `POST /api/v1/restaurantes` (solo ADMINISTRADOR)
+
+```json
+{
+  "nombre": "El Corral",
+  "nit": "900123",
+  "direccion": "Calle 1 # 2-3",
+  "telefono": "+573001112233",
+  "urlLogo": "http://logo.png",
+  "idPropietario": 1
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`RestauranteRequestDTO`) revisa: todos los campos obligatorios, el nombre no puede ser solo números, el NIT solo números, el teléfono máximo 13 con `+` al inicio.
+2. **El service** (`RestauranteServiceImpl`) revisa que el NIT no esté repetido y que el `idPropietario` sea de un usuario que existe y tiene rol `PROPIETARIO`. Si todo está bien, lo guarda.
+
+### Para qué se hace así
+Para que no se creen restaurantes sin dueño o con un usuario que no es propietario.
+
+## HU-03 Crear plato
+
+### Qué hace
+Permite que el propietario cree platos en **su** restaurante. Cada plato pertenece a una categoría y nace activo.
+
+**Endpoint:** `POST /api/v1/platos` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "nombre": "Corral Clasica",
+  "precio": 25000,
+  "descripcion": "Carne y queso",
+  "urlImagen": "http://img.png",
+  "idCategoria": 1,
+  "idRestaurante": 1
+}
+```
+
+Las categorías se crean y consultan en `POST /api/v1/categorias` y `GET /api/v1/categorias` (como en el proyecto de la profe).
+
+### Cómo lo hace
+1. **El DTO** (`PlatoRequestDTO`) revisa: campos obligatorios y precio entero mayor a 0.
+2. **El service** (`PlatoServiceImpl`) revisa que el restaurante y la categoría existan y que el usuario logueado sea el dueño del restaurante.
+3. Guarda el plato con `estado = true` (activo).
+
+## HU-04 Modificar plato
+
+### Qué hace
+Permite que el propietario cambie **solo el precio y la descripción** de un plato de su restaurante.
+
+**Endpoint:** `PATCH /api/v1/platos/{idPlato}` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "precio": 30000,
+  "descripcion": "Carne, queso y tocineta"
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`ModificarPlatoRequestDTO`) solo tiene precio y descripción: los demás campos no se pueden mandar.
+2. **El service** revisa que el plato exista y que el usuario logueado sea el dueño del restaurante del plato. Si es de otro restaurante responde `403`.
+
+## HU-05 Agregar autenticación
+
+### Qué hace
+Todos los usuarios inician sesión con correo y clave. Al entrar reciben un **token** que deben enviar en cada petición. Cada endpoint solo lo puede usar el rol que corresponde.
+
+**Endpoint:** `POST /api/v1/auth/login` (libre)
+
+```json
+{ "correo": "admin@plazoleta.com", "clave": "..." }
+```
+
+Responde `{ "token": "eyJ..." }`. Ese token se manda en las demás peticiones en el header:
+`Authorization: Bearer eyJ...`
+
+El script de la base de datos trae un **administrador inicial** (el correo y la clave de prueba están en el comentario de `docs/script.sql`).
+
+### Cómo lo hace
+1. **`AuthServiceImpl`** busca el usuario por correo y compara la clave con la guardada en bcrypt. Si falla responde `401` con "Usuario no encontrado" o "Clave incorrecta". Los intentos son ilimitados.
+2. **`JwtService`** crea el token con el correo y el rol del usuario (dura 1 hora).
+3. **`JwtAuthenticationFilter`** lee el token en cada petición y deja al usuario como logueado con su rol.
+4. **`SecurityConfig`** dice quién puede usar cada endpoint:
+
+| Endpoint | Quién |
+|----------|-------|
+| `POST /api/v1/auth/login` | Cualquiera |
+| `POST /api/v1/usuarios/cliente` | Cualquiera (el cliente se registra solo) — HU-08 |
+| `POST /api/v1/usuarios/propietario` | ADMINISTRADOR |
+| `POST /api/v1/restaurantes` | ADMINISTRADOR |
+| `POST /api/v1/usuarios/empleado` | PROPIETARIO (dueño del restaurante) — HU-06 |
+| `POST /api/v1/platos` | PROPIETARIO (dueño del restaurante) |
+| `PATCH /api/v1/platos/{id}` | PROPIETARIO (dueño del restaurante) |
+| `PATCH /api/v1/platos/{idPlato}/estado` | PROPIETARIO (dueño del restaurante) — HU-07 |
+| `GET /api/v1/restaurantes` | CLIENTE — HU-09 |
+| `GET /api/v1/platos` | CLIENTE — HU-10 |
+| `POST /api/v1/pedidos` | CLIENTE — HU-11 |
+| `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
+| Todo lo demás | Cualquier usuario logueado |
+
+5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
+
+### Respuestas de seguridad
+| Caso | Respuesta |
+|------|-----------|
+| Sin token o token alterado/vencido | `401` |
+| Logueado pero con un rol sin permiso | `403` |
+| Propietario intentando tocar platos de otro restaurante | `403` |
+
+> La validación de "crear empleado (solo propietario)" quedó lista con la HU-06.
+
+## HU-06 Crear cuenta empleado
+
+### Qué hace
+Permite que el propietario cree las cuentas de los empleados de **su** restaurante, para que puedan entrar al sistema y administrar los pedidos.
+
+**Endpoint:** `POST /api/v1/usuarios/empleado` (solo PROPIETARIO dueño del restaurante)
+
+```json
+{
+  "nombre": "Pedro",
+  "apellido": "Lopez",
+  "documentoDeIdentidad": "11223344",
+  "celular": "+573001234567",
+  "correo": "pedro@mail.com",
+  "idRol": 3,
+  "clave": "pedro123",
+  "idRestaurante": 1
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `PROPIETARIO`.
+2. **El DTO** (`EmpleadoRequestDTO`) revisa los campos obligatorios de la HU (nombre, apellido, documento, celular, correo, idRol y clave) y el formato, igual que el propietario: correo válido, celular máximo 13 con `+`, documento numérico.
+3. **El service** (`UsuarioServiceImpl.crearEmpleado`) revisa en orden:
+   - Que el restaurante exista.
+   - Que el propietario que hizo login sea **el dueño** de ese restaurante (si no, `403`).
+   - Que el correo y el documento no estén registrados.
+   - Que el `idRol` sea el del rol `EMPLEADO` (si no, `400`).
+4. Guarda el usuario con la clave encriptada y rol `EMPLEADO`, y en la tabla `empleado_restaurante` guarda a qué restaurante pertenece. Las dos cosas se guardan juntas (`@Transactional`): si una falla, no se guarda ninguna.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con los datos del empleado y `"rol": "EMPLEADO"` |
+| Sin token | `401` |
+| Admin u otro rol que no es propietario | `403` |
+| Propietario que no es dueño del restaurante | `403` |
+| Campos vacíos o formato malo | `400` con el error de cada campo |
+| `idRol` distinto al de EMPLEADO | `400` |
+| Correo o documento repetido | `400` |
+
+### Para qué se hace así
+Se pide `idRestaurante` porque la HU dice "empleados **de su empresa**": hay que saber a qué restaurante pertenece. Esa relación la usa la HU-12 para que cada empleado vea solo los pedidos de su restaurante. El `idRol` se pide porque la HU lo lista como campo, y se valida que sea el de empleado porque la HU dice que "quedará con el rol de empleado".
+
+## HU-08 Crear cuenta cliente
+
+### Qué hace
+Permite que un cliente cree su propia cuenta para poder entrar al sistema y hacer pedidos.
+
+**Endpoint:** `POST /api/v1/usuarios/cliente` (libre, sin iniciar sesión)
+
+```json
+{
+  "nombre": "Ana",
+  "apellido": "Gomez",
+  "documentoDeIdentidad": "99887766",
+  "celular": "+573009998877",
+  "correo": "ana@mail.com",
+  "clave": "ana123"
+}
+```
+
+### Cómo lo hace
+1. **El DTO** (`ClienteRequestDTO`) revisa los campos obligatorios de la HU (nombre, apellido, documento, celular, correo y clave) y el formato, igual que el propietario y el empleado.
+2. **El service** (`UsuarioServiceImpl.crearCliente`) revisa que el correo y el documento no estén registrados, encripta la clave y lo guarda con rol `CLIENTE`.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con los datos del cliente y `"rol": "CLIENTE"` |
+| Campos vacíos o formato malo | `400` con el error de cada campo |
+| Correo o documento repetido | `400` |
+
+### Para qué se hace así
+Es el único registro que no pide iniciar sesión: el cliente se crea su propia cuenta, así que todavía no tiene con qué entrar. No se pide rol ni fecha de nacimiento porque la HU-08 no los pide; el rol `CLIENTE` lo pone el sistema. La HU-11 (realizar pedido) usa esta cuenta.
+
+## HU-07 Habilitar/Deshabilitar plato
+
+### Qué hace
+Permite que el propietario active o desactive un plato de su restaurante para dejar de ofrecerlo sin borrarlo. Solo cambia el estado; el resto del plato queda igual.
+
+**Endpoint:** `PATCH /api/v1/platos/{idPlato}/estado` (solo PROPIETARIO dueño del restaurante, con Bearer Token JWT)
+
+```json
+{
+  "activo": false
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `PROPIETARIO`. Sin token o con token inválido/vencido responde `401`.
+2. **El DTO** (`HabilitarPlatoRequestDTO`) solo tiene el campo `activo` (`Boolean` obligatorio): los demás campos no se pueden mandar. Si el body viene mal responde `400`.
+3. **El service** (`PlatoServiceImpl.cambiarEstadoPlato`) busca el plato por `idPlato`; si no existe responde `404`. Luego reutiliza `validarDueno` y compara el correo del token con el del propietario del restaurante del plato; si no es el dueño responde `403`.
+4. Guarda el valor de `activo` en `Plato.estado` y devuelve el plato actualizado (`200`).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con el plato y su nuevo `estado` |
+| Plato que no existe | `404` `{"mensaje": "El plato no existe"}` |
+| Propietario de otro restaurante | `403` (no es el dueño del restaurante del plato) |
+| Logueado con rol sin permiso | `403` |
+| Sin token o token inválido/vencido | `401` |
+| Body sin `activo` o con formato malo | `400` con el error del campo |
+
+### Para qué se hace así
+El campo se llama `activo` en la petición porque así lo pide la HU, y se guarda en `Plato.estado` porque esa es la columna que ya existe en la base de datos (no se crea columna nueva). La validación de dueño se reutiliza (`validarDueno`, la misma de HU-03/HU-04) para no duplicar lógica y no tocar platos de otros restaurantes. El `404` usa `ResponseStatusException` para no cambiar el `400` que `ReglaNegocioException` devuelve en las otras HU.
+
+## HU-10 Listar los platos de un restaurante
+
+### Qué hace
+Permite que el cliente vea el menú de un restaurante, por páginas, escogiendo cuántos platos ver por página y, si quiere, filtrando por categoría.
+
+**Endpoint:** `GET /api/v1/platos` (solo CLIENTE)
+
+```
+GET /api/v1/platos?idRestaurante=1&pagina=0&tamano=5
+GET /api/v1/platos?idRestaurante=1&idCategoria=2&pagina=0&tamano=5
+```
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `idRestaurante` | De qué restaurante es el menú | Sí |
+| `idCategoria` | Filtrar por categoría | No |
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos platos por página | No (10) |
+
+Respuesta:
+```json
+{
+  "contenido": [ { "id": 1, "nombre": "Corral Clasica", "precio": 25000, "categoria": "Hamburguesas", ... } ],
+  "pagina": 0,
+  "tamano": 5,
+  "totalElementos": 12,
+  "totalPaginas": 3
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El service** (`PlatoServiceImpl.listarPlatos`) revisa que la página sea 0 o mayor, que el tamaño sea 1 o mayor y que el restaurante exista.
+3. **El repository** (`PlatoRepository`) trae solo la página pedida, con una búsqueda que Spring arma por el nombre del método: por restaurante, o por restaurante y categoría, y siempre solo platos activos.
+4. La respuesta usa `PaginaResponseDTO`, que sirve para cualquier lista paginada (también para la HU-09 y la HU-12).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los platos de esa página y los totales |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Tamaño menor a 1 o página negativa | `400` |
+| Restaurante que no existe | `400` |
+
+### Para qué se hace así
+Solo aparecen los platos activos, porque la HU-07 dice que desactivar un plato es para "dejar de ofrecer el producto en el menú". La paginación la hace Spring (`Pageable`), así la base de datos solo devuelve los platos de la página pedida y no todos.
+
+## HU-11 Realizar pedido
+
+### Qué hace
+Permite que el cliente haga un pedido con los platos que quiere de un restaurante, diciendo la cantidad de cada uno.
+
+**Endpoint:** `POST /api/v1/pedidos` (solo CLIENTE)
+
+```json
+{
+  "idRestaurante": 1,
+  "platos": [
+    { "idPlato": 1, "cantidad": 2 },
+    { "idPlato": 3, "cantidad": 1 }
+  ]
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El DTO** (`PedidoRequestDTO`) revisa que venga el restaurante, que haya al menos un plato y que cada cantidad sea mayor a 0.
+3. **El service** (`PedidoServiceImpl.crearPedido`) revisa en orden:
+   - Que el cliente no tenga ya un pedido `PENDIENTE`, `EN_PREPARACION` o `LISTO`.
+   - Que el restaurante exista.
+   - Que cada plato exista, sea **de ese restaurante** y esté **activo**.
+4. Primero revisa todos los platos y después guarda: el pedido con estado `PENDIENTE` (tabla `pedido`) y cada plato con su cantidad (tabla `plato_pedido`). Así, si un plato está mal, no queda nada guardado a medias.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `201` con el pedido en estado `PENDIENTE` y sus platos |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Sin platos o cantidad 0 | `400` |
+| Restaurante o plato que no existe | `400` |
+| Plato de otro restaurante | `400` |
+| Plato desactivado | `400` |
+| Ya tiene un pedido en proceso | `400` |
+
+### Para qué se hace así
+Cumple las reglas de la HU: todos los platos de un mismo restaurante, cada uno con su cantidad, el pedido nace en `PENDIENTE` y un cliente solo puede tener un pedido en proceso a la vez. No se dejan pedir platos desactivados porque la HU-07 dice que desactivar un plato es dejar de ofrecerlo.
+
+> La entity `Pedido` por ahora tiene estado, cliente y restaurante. Los demás campos de la tabla (empleado asignado y PIN) los agregan las HU que los usan (HU-12 en adelante).
+
+## HU-09 Listar restaurantes
+
+### Qué hace
+Permite que el cliente vea los restaurantes disponibles para elegir en cuál ordenar, por orden alfabético y por páginas. De cada restaurante muestra únicamente el nombre y el logo.
+
+**Endpoint:** `GET /api/v1/restaurantes` (solo CLIENTE)
+
+```
+GET /api/v1/restaurantes?pagina=0&tamano=10
+```
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos restaurantes por página | No (10) |
+
+Respuesta:
+```json
+{
+  "contenido": [ { "nombre": "El Corral", "urlLogo": "http://logo.png" } ],
+  "pagina": 0,
+  "tamano": 10,
+  "totalElementos": 3,
+  "totalPaginas": 1
+}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El service** (`RestauranteServiceImpl.listarRestaurantes`) revisa que la página sea 0 o mayor y que el tamaño sea 1 o mayor.
+3. **El repository** trae solo la página pedida con `findAll(Pageable)`, ordenada por `nombre` de la A a la Z.
+4. La respuesta usa `PaginaResponseDTO` (el mismo de la HU-10) y cada restaurante sale como `RestauranteListadoResponseDTO`, que solo tiene `nombre` y `urlLogo`.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los restaurantes de esa página y los totales |
+| Sin token | `401` |
+| Rol distinto a CLIENTE | `403` |
+| Tamaño menor a 1 o página negativa | `400` |
+
+### Para qué se hace así
+El orden y la paginación los hace la base de datos (`Pageable` + `Sort`), así solo devuelve los restaurantes de la página pedida y no todos. El DTO trae solo 2 campos porque la HU dice que "deben ser únicamente: Nombre, UrlLogo".
+
+## HU-12 Listar pedidos por estado (empleado)
+
+### Qué hace
+Permite que el empleado vea los pedidos de **su** restaurante filtrados por estado, por páginas, para elegir a cuál cambiarle el estado. Cada pedido sale con todos sus campos y sus platos.
+
+**Endpoint:** `GET /api/v1/pedidos?estado=PENDIENTE&pagina=0&tamano=10` (solo EMPLEADO)
+
+| Dato | Para qué | Obligatorio |
+|------|----------|-------------|
+| `estado` | Filtrar por estado: PENDIENTE, EN_PREPARACION, LISTO, ENTREGADO o CANCELADO (en mayúsculas) | Sí |
+| `pagina` | Qué página ver (empieza en 0) | No (0) |
+| `tamano` | Cuántos pedidos por página | No (10) |
+
+Solo salen los pedidos del restaurante al que pertenece el empleado (se saca de la tabla `empleado_restaurante` con el correo del token), ordenados por id. Cada pedido trae sus platos (`idPlato`, `nombre`, `cantidad`).
+
+Ejemplo de respuesta real (empleado Juan, restaurante 1):
+```json
+{"contenido":[{"id":1,"estado":"PENDIENTE","idRestaurante":1,"platos":[{"idPlato":1,"nombre":"Corral Clasica","cantidad":2}]}],"pagina":0,"tamano":10,"totalElementos":1,"totalPaginas":1}
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `EMPLEADO`.
+2. **El service** (`PedidoServiceImpl.listarPedidosPorEstado`) busca al empleado por el correo del token y luego su restaurante en `empleado_restaurante` (el método que la HU-06 dejó listo para la HU-12). Si no tiene restaurante asignado responde `403`.
+3. Revisa que el `estado` sea uno válido (en mayúsculas) y que la página y el tamaño tengan sentido.
+4. **El repository** (`PedidoRepository`) trae solo la página pedida de **ese restaurante** con ese estado, ordenada por id.
+5. La respuesta usa `PaginaResponseDTO` (el mismo de HU-09 y HU-10) y cada pedido sale completo: id, estado, restaurante y sus platos con cantidad.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con los pedidos de esa página y los totales |
+| Estado inválido, en minúscula o sin estado | `400` `{"mensaje": "El estado debe ser uno de: PENDIENTE, EN_PREPARACION, LISTO, ENTREGADO, CANCELADO"}` |
+| Página negativa | `400` `{"mensaje": "La pagina debe ser 0 o mayor"}` |
+| Tamaño menor a 1 | `400` `{"mensaje": "El tamano de pagina debe ser 1 o mayor"}` |
+| Sin token | `401` |
+| CLIENTE, ADMINISTRADOR o PROPIETARIO | `403` |
+| Empleado sin restaurante asignado | `403` |
+
+Casos probados en Postman: pendientes del empleado, aislamiento (el empleado de otro restaurante recibe contenido vacío), otro estado (vacío), paginado con `tamano=1`, página vacía, estado inválido, estado en minúscula, sin estado, página negativa, tamaño cero, sin token (`401`), cliente/admin/propietario (`403`).
+
+> Nota: aún no existe endpoint para cambiar el estado de un pedido, por eso en las pruebas todos los pedidos están en PENDIENTE y los demás estados devuelven lista vacía.
+
+### Para qué se hace así
+El restaurante no se pide en la URL porque sale del empleado que hizo login: así "solo se pueden listar los pedidos del restaurante al que pertenece el empleado" sin que pueda espiar los de otros. El filtro por estado permite al empleado enfocarse (ej. solo `PENDIENTE`) para decidir cuál atender.
 
 ## Estado actual
 
-**HU-01 terminada** en la rama `feature/HU-01-crear-propietario` (pieza de Usuarios). Es la base para lo que sigue.
+| HU | Estado |
+|----|--------|
+| HU-01 Crear propietario | ✅ Migrada a Spring Boot |
+| HU-02 Crear restaurante | ✅ Migrada a Spring Boot |
+| HU-03 Crear plato | ✅ Migrada a Spring Boot |
+| HU-04 Modificar plato | ✅ Migrada a Spring Boot |
+| HU-05 Autenticación | ✅ Migrada a Spring Boot |
+| HU-06 Crear cuenta empleado | ✅ Sprint 2 |
+| HU-07 Habilitar/Deshabilitar plato | ✅ Hecha en Spring Boot |
+| HU-08 Crear cuenta cliente | ✅ Sprint 2 |
+| HU-09 Listar restaurantes | ✅ Sprint 2 |
+| HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
+| HU-11 Realizar pedido | ✅ Sprint 2 |
+| HU-12 Listar pedidos por estado (empleado) | ✅ Sprint 2 |
 
-**HU-02 terminada** en la rama `feature/HU-02-crear-restaurante` (pieza de Plazoleta). Agrega `model/Restaurante.java:1`, `repository/RestauranteRepository.java:1`, `service/RestauranteService.java:17` y ejemplo en `Main.java:11`. No modifica nada de Propietario.
-
-**HU-03 terminada** en la rama `feature/HU-03-crear-plato` (pieza de Plazoleta). Agrega `model/Plato.java:1`, `repository/PlatoRepository.java:1`, `service/PlatoService.java:19` y corrige `repository/RestauranteRepository.java:22` con `obtenerPorNit` para que `PlatoService` pueda validar existencia y dueño. `Main.java:50` ahora demuestra 1 caso válido y 3 errores esperados (precio inválido, no es dueño, restaurante no existe).
-
-**HU-04 terminada** en la rama `feature/HU-04-Modificar-plato` (pieza de Plazoleta). Agrega `Plato.java:50` `setPrecio/setDescripcion` y `PlatoService.java:50` `modificarPlato()` con 6 validaciones (vacíos, precio>0, restaurante existe, es dueño, plato existe, solo precio+desc). `Main.java:99` ahora demuestra 1 caso válido y 2 errores esperados (no es dueño, precio inválido). No toca ningún repository.
-
-**HU-05 terminada** en la rama `feature/HU-05-agregar-autenticación-al-sistema` (pieza de Usuarios). Agrega `service/AutenticacionService.java:1` con `iniciarSesion(correo, clave)` y `tienePermiso`, ahora completa con validación por endpoint: `Propietario.java:16` soporta `ADMINISTRADOR`, `model/Empleado.java:1` + `repository/EmpleadoRepository.java:1` + `service/EmpleadoService.java:22` (solo propietario dueño), `PropietarioService.java:38` y `RestauranteService.java:62` exigen `ADMINISTRADOR`, `PlatoService.java:48`/`68` exigen `PROPIETARIO` dueño con objeto autenticado. `Main.java:127` demuestra login, intentos ilimitados y 4 bloques de validación por endpoint (propietario/restaurante/empleado/plato) con casos OK y errores esperados.
-
-**Qué sigue:** HU-06 y siguientes. Cada historia nueva agregará su parte aquí en este README.
+**Qué sigue:** sprint 3 (HU-13 a HU-18). Cada HU nueva agrega su parte aquí en este README.
