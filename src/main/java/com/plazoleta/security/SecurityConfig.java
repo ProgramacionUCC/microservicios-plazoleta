@@ -74,6 +74,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/pedidos").hasRole("CLIENTE")
                         // HU-12: "Yo como empleado... necesito visualizar la lista de pedidos filtrando por estado"
                         .requestMatchers(HttpMethod.GET, "/api/v1/pedidos").hasRole("EMPLEADO")
+                        // HU-13: "Yo como empleado... necesito asignarme a un pedido y cambiarle su estado"
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/asignar").hasRole("EMPLEADO")
                         // "Exponer mis servicios solo a usuarios logueados": todo lo demas pide token
                         .anyRequest().authenticated()
                 )

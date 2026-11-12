@@ -223,6 +223,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `GET /api/v1/platos` | CLIENTE — HU-10 |
 | `POST /api/v1/pedidos` | CLIENTE — HU-11 |
 | `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
+| `PATCH /api/v1/pedidos/{id}/asignar` | EMPLEADO — HU-13 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -524,6 +525,35 @@ Casos probados en Postman: pendientes del empleado, aislamiento (el empleado de 
 ### Para qué se hace así
 El restaurante no se pide en la URL porque sale del empleado que hizo login: así "solo se pueden listar los pedidos del restaurante al que pertenece el empleado" sin que pueda espiar los de otros. El filtro por estado permite al empleado enfocarse (ej. solo `PENDIENTE`) para decidir cuál atender.
 
+## HU-13 Asignarse a un pedido y pasarlo a "en preparación"
+
+### Qué hace
+El empleado toma un pedido pendiente de su restaurante: el pedido queda a su nombre y pasa a `EN_PREPARACION`, así el cliente sabe que ya lo están haciendo.
+
+**Endpoint:** `PATCH /api/v1/pedidos/{idPedido}/asignar` (solo EMPLEADO, sin body)
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `EMPLEADO`.
+2. **El service** (`PedidoServiceImpl.asignarPedido`) revisa en orden:
+   - Que el empleado (el del token) trabaje en un restaurante; si no, `403`.
+   - Que el pedido exista; si no, `400`.
+   - Que el pedido sea **de su restaurante**; si no, `403`.
+   - Que el pedido esté `PENDIENTE`; si no, `400`.
+3. Guarda el empleado en el pedido (columna `idEmpleado`) y cambia el estado a `EN_PREPARACION`.
+4. La respuesta del pedido ahora incluye `idEmpleado` (también en la lista de la HU-12).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con el pedido en `EN_PREPARACION` y su `idEmpleado` |
+| Sin token | `401` |
+| Rol distinto a EMPLEADO | `403` |
+| Pedido de otro restaurante | `403` |
+| Pedido que no existe o que ya no está pendiente | `400` |
+
+### Para qué se hace así
+"Asignarse" es guardar el id del empleado en el pedido. No hay límite de pedidos por empleado, porque la HU dice que puede preparar varios a la vez. El restaurante sale del empleado que hizo login, así no puede tocar pedidos de otros restaurantes.
+
 ## Estado actual
 
 | HU | Estado |
@@ -540,5 +570,6 @@ El restaurante no se pide en la URL porque sale del empleado que hizo login: as�
 | HU-10 Listar platos de un restaurante | ✅ Sprint 2 |
 | HU-11 Realizar pedido | ✅ Sprint 2 |
 | HU-12 Listar pedidos por estado (empleado) | ✅ Sprint 2 |
+| HU-13 Asignarse a un pedido | ✅ Sprint 3 |
 
-**Qué sigue:** sprint 3 (HU-13 a HU-18). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 3 (HU-14 a HU-17). Cada HU nueva agrega su parte aquí en este README.

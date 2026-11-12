@@ -37,4 +37,10 @@ public class Pedido {
     @ManyToOne
     @JoinColumn(name = "idRestaurante")
     private Restaurante restaurante;
+
+    // Empleado que se asigno al pedido (HU-13). Es null hasta que alguien lo toma.
+    // Un empleado puede tener VARIOS pedidos a la vez, por eso es @ManyToOne.
+    @ManyToOne
+    @JoinColumn(name = "idEmpleado")
+    private Usuario empleado;
 }

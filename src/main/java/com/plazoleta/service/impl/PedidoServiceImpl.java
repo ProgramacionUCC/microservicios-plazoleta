@@ -31,7 +31,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Reglas de negocio de pedidos: HU-11 (realizar pedido) y HU-12 (listar por estado).
+ * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado)
+ * y HU-13 (asignarse un pedido).
  * Que el usuario sea CLIENTE o EMPLEADO ya lo reviso SecurityConfig.
  * El formato (restaurante, lista de platos, cantidades) ya lo reviso el DTO.
  */
@@ -171,8 +172,50 @@ public class PedidoServiceImpl implements PedidoService {
                 .build();
     }
 
+    /**
+     * HU-13: el empleado se asigna un pedido y lo pasa a EN_PREPARACION.
+     * "Asignarse a un pedido significa que en el campo EmpleadoAsignado se pone el id de quien se asigna"
+     * "Un empleado puede asignarse a varios pedidos al tiempo"
+     * "Solo se pueden listar y gestionar los pedidos del restaurante al que pertenece el empleado"
+     */
+    @Override
+    public PedidoResponseDTO asignarPedido(Integer idPedido, String correoEmpleado) {
+        // 1. El empleado que hizo login y el restaurante donde trabaja
+        EmpleadoRestaurante vinculo = buscarVinculoDelEmpleado(correoEmpleado);
+
+        // 2. El pedido debe existir
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ReglaNegocioException("El pedido no existe"));
+
+        // 3. Solo puede gestionar pedidos de SU restaurante -> si no, 403
+        if (!pedido.getRestaurante().getId().equals(vinculo.getRestaurante().getId())) {
+            throw new AccesoDenegadoException("Solo puedes gestionar los pedidos de tu restaurante");
+        }
+
+        // 4. Solo se puede tomar un pedido que todavia esta PENDIENTE
+        if (!pedido.getEstado().equals("PENDIENTE")) {
+            throw new ReglaNegocioException("Solo se puede asignar un pedido PENDIENTE");
+        }
+
+        // 5. Se anota quien lo tomo y pasa a EN_PREPARACION
+        pedido.setEmpleado(vinculo.getEmpleado());
+        pedido.setEstado("EN_PREPARACION");
+
+        return convertirConPlatos(pedidoRepository.save(pedido));
+    }
+
+    // Busca al empleado por el correo del token y el restaurante donde trabaja
+    // (tabla empleado_restaurante). Si no trabaja en ningun restaurante -> 403.
+    private EmpleadoRestaurante buscarVinculoDelEmpleado(String correoEmpleado) {
+        Usuario empleado = usuarioRepository.findByCorreo(correoEmpleado)
+                .orElseThrow(() -> new ReglaNegocioException("El empleado no existe"));
+
+        return empleadoRestauranteRepository.findByEmpleadoId(empleado.getId())
+                .orElseThrow(() -> new AccesoDenegadoException("Solo los empleados con restaurante asignado pueden gestionar pedidos"));
+    }
+
     // Convierte un Pedido en su DTO con TODOS los campos: id, estado,
-    // restaurante y la lista de platos con su cantidad (tabla plato_pedido)
+    // restaurante, empleado asignado y la lista de platos con su cantidad (tabla plato_pedido)
     private PedidoResponseDTO convertirConPlatos(Pedido pedido) {
         List<PlatoPedidoResponseDTO> platos = platoPedidoRepository.findByPedidoId(pedido.getId()).stream()
                 .map(pp -> PlatoPedidoResponseDTO.builder()
@@ -186,6 +229,7 @@ public class PedidoServiceImpl implements PedidoService {
                 .id(pedido.getId())
                 .estado(pedido.getEstado())
                 .idRestaurante(pedido.getRestaurante().getId())
+                .idEmpleado(pedido.getEmpleado() == null ? null : pedido.getEmpleado().getId())
                 .platos(platos)
                 .build();
     }

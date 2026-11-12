@@ -17,4 +17,7 @@ public interface PedidoService {
     // HU-12: el empleado lista los pedidos de SU restaurante filtrados por estado.
     // correoEmpleado sale del token (es el empleado que hizo login).
     PaginaResponseDTO<PedidoResponseDTO> listarPedidosPorEstado(String estado, int pagina, int tamano, String correoEmpleado);
+
+    // HU-13: el empleado se asigna un pedido de SU restaurante y lo pasa a EN_PREPARACION.
+    PedidoResponseDTO asignarPedido(Integer idPedido, String correoEmpleado);
 }
