@@ -12,8 +12,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Puerta de entrada para pedidos (HU-11 y HU-12).
- * Crear pedido: solo CLIENTE. Listar por estado: solo EMPLEADO.
+ * Puerta de entrada para pedidos (HU-11, HU-12 y HU-13).
+ * Crear pedido: solo CLIENTE. Listar por estado y asignarse un pedido: solo EMPLEADO.
  * (reglas en SecurityConfig)
  */
 @RestController
@@ -52,5 +52,18 @@ public class PedidoController {
             Authentication authentication) {
         return ResponseEntity.ok(  // 200
                 pedidoService.listarPedidosPorEstado(estado, pagina, tamano, authentication.getName()));
+    }
+
+    /**
+     * HU-13: el empleado se asigna un pedido y lo pasa a EN_PREPARACION.
+     * PATCH http://localhost:8080/api/v1/pedidos/5/asignar
+     * Solo EMPLEADO (regla en SecurityConfig). No lleva body: el id del pedido va en la URL
+     * y el empleado es quien hizo login (authentication.getName() = su correo).
+     */
+    @PatchMapping("/{idPedido}/asignar")
+    public ResponseEntity<PedidoResponseDTO> asignarPedido(@PathVariable Integer idPedido,
+                                                           Authentication authentication) {
+        return ResponseEntity.ok(  // 200
+                pedidoService.asignarPedido(idPedido, authentication.getName()));
     }
 }

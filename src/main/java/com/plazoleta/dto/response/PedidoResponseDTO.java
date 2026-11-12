@@ -16,5 +16,6 @@ public class PedidoResponseDTO {
     private Integer id;
     private String estado;           // PENDIENTE al crearse
     private Integer idRestaurante;
+    private Integer idEmpleado;      // null si todavia nadie se asigno el pedido (HU-13)
     private List<PlatoPedidoResponseDTO> platos;
 }
