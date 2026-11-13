@@ -20,4 +20,7 @@ public interface PedidoService {
 
     // HU-13: el empleado se asigna un pedido de SU restaurante y lo pasa a EN_PREPARACION.
     PedidoResponseDTO asignarPedido(Integer idPedido, String correoEmpleado);
+
+    // HU-14: el empleado marca el pedido como LISTO. Se genera un PIN y se avisa al cliente.
+    PedidoResponseDTO marcarPedidoListo(Integer idPedido, String correoEmpleado);
 }

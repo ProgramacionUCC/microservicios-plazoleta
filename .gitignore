@@ -41,6 +41,9 @@ AGENTS.md
 agents.md
 repaso.md
 
+### Datos privados (credenciales de Twilio) - nunca subir ###
+application-local.properties
+
 ### Docs - solo se sube el README ###
 *.md
 !README.md

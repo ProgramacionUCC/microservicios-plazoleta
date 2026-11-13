@@ -19,6 +19,7 @@ import com.plazoleta.repository.PlatoPedidoRepository;
 import com.plazoleta.repository.PlatoRepository;
 import com.plazoleta.repository.RestauranteRepository;
 import com.plazoleta.repository.UsuarioRepository;
+import com.plazoleta.notificacion.PedidoListoObserver;
 import com.plazoleta.service.PedidoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,12 +28,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado)
- * y HU-13 (asignarse un pedido).
+ * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado),
+ * HU-13 (asignarse un pedido) y HU-14 (marcar pedido listo).
  * Que el usuario sea CLIENTE o EMPLEADO ya lo reviso SecurityConfig.
  * El formato (restaurante, lista de platos, cantidades) ya lo reviso el DTO.
  */
@@ -52,6 +54,10 @@ public class PedidoServiceImpl implements PedidoService {
     private final RestauranteRepository restauranteRepository;
     private final PlatoRepository platoRepository;
     private final EmpleadoRestauranteRepository empleadoRestauranteRepository;  // Para saber de que restaurante es el empleado
+
+    // Observadores del "pedido listo" (HU-14). Spring entrega aqui TODAS las clases
+    // que implementan PedidoListoObserver (consola y, si esta activo, Twilio).
+    private final List<PedidoListoObserver> observadores;
 
     @Override
     public PedidoResponseDTO crearPedido(PedidoRequestDTO dto, String correoCliente) {
@@ -201,6 +207,46 @@ public class PedidoServiceImpl implements PedidoService {
         pedido.setEmpleado(vinculo.getEmpleado());
         pedido.setEstado("EN_PREPARACION");
 
+        return convertirConPlatos(pedidoRepository.save(pedido));
+    }
+
+    /**
+     * HU-14: el empleado marca el pedido como LISTO y el cliente recibe un SMS con un PIN.
+     * "Si el SMS no se envia, el pedido no cambia de estado"
+     */
+    @Override
+    public PedidoResponseDTO marcarPedidoListo(Integer idPedido, String correoEmpleado) {
+        // 1. El empleado que hizo login y el restaurante donde trabaja
+        EmpleadoRestaurante vinculo = buscarVinculoDelEmpleado(correoEmpleado);
+
+        // 2. El pedido debe existir
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ReglaNegocioException("El pedido no existe"));
+
+        // 3. Solo puede gestionar pedidos de SU restaurante -> si no, 403
+        if (!pedido.getRestaurante().getId().equals(vinculo.getRestaurante().getId())) {
+            throw new AccesoDenegadoException("Solo puedes gestionar los pedidos de tu restaurante");
+        }
+
+        // 4. Solo un pedido EN_PREPARACION puede pasar a LISTO
+        if (!pedido.getEstado().equals("EN_PREPARACION")) {
+            throw new ReglaNegocioException("Solo se puede marcar como listo un pedido EN_PREPARACION");
+        }
+
+        // 5. Se genera el PIN: 4 numeros al azar (del 0000 al 9999)
+        String pin = String.format("%04d", new SecureRandom().nextInt(10000));
+
+        // 6. Se avisa a los observadores (consola y, si esta activo, SMS por Twilio).
+        //    Se hace ANTES de guardar: si el SMS falla, se lanza error y el pedido queda como estaba.
+        for (PedidoListoObserver observador : observadores) {
+            observador.pedidoListo(pedido, pin);
+        }
+
+        // 7. Todo salio bien: el pedido queda LISTO con su PIN guardado
+        pedido.setPin(pin);
+        pedido.setEstado("LISTO");
+
+        // La respuesta no incluye el PIN: solo lo recibe el cliente por SMS
         return convertirConPlatos(pedidoRepository.save(pedido));
     }
 
