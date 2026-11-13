@@ -23,4 +23,7 @@ public interface PedidoService {
 
     // HU-14: el empleado marca el pedido como LISTO. Se genera un PIN y se avisa al cliente.
     PedidoResponseDTO marcarPedidoListo(Integer idPedido, String correoEmpleado);
+
+    // HU-15: el empleado entrega el pedido LISTO si el PIN es el que recibio el cliente.
+    PedidoResponseDTO entregarPedido(Integer idPedido, String pin, String correoEmpleado);
 }
