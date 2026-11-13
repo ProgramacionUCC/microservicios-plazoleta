@@ -66,4 +66,17 @@ public class PedidoController {
         return ResponseEntity.ok(  // 200
                 pedidoService.asignarPedido(idPedido, authentication.getName()));
     }
+
+    /**
+     * HU-14: el empleado marca el pedido como LISTO y el cliente recibe un SMS con el PIN.
+     * PATCH http://localhost:8080/api/v1/pedidos/5/listo
+     * Solo EMPLEADO (regla en SecurityConfig). No lleva body.
+     * La respuesta NO incluye el PIN: solo lo recibe el cliente.
+     */
+    @PatchMapping("/{idPedido}/listo")
+    public ResponseEntity<PedidoResponseDTO> marcarPedidoListo(@PathVariable Integer idPedido,
+                                                               Authentication authentication) {
+        return ResponseEntity.ok(  // 200
+                pedidoService.marcarPedidoListo(idPedido, authentication.getName()));
+    }
 }

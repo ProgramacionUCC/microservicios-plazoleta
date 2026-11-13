@@ -224,6 +224,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `POST /api/v1/pedidos` | CLIENTE — HU-11 |
 | `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
 | `PATCH /api/v1/pedidos/{id}/asignar` | EMPLEADO — HU-13 |
+| `PATCH /api/v1/pedidos/{id}/listo` | EMPLEADO — HU-14 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -554,6 +555,59 @@ El empleado toma un pedido pendiente de su restaurante: el pedido queda a su nom
 ### Para qué se hace así
 "Asignarse" es guardar el id del empleado en el pedido. No hay límite de pedidos por empleado, porque la HU dice que puede preparar varios a la vez. El restaurante sale del empleado que hizo login, así no puede tocar pedidos de otros restaurantes.
 
+## HU-14 Notificar que el pedido está listo (SMS con PIN)
+
+### Qué hace
+Cuando el pedido está preparado, el empleado lo marca como listo. El sistema genera un **PIN de 4 números**, se lo manda al cliente por SMS y el pedido pasa a `LISTO`. El cliente deberá decir ese PIN al recoger el pedido (HU-15).
+
+**Endpoint:** `PATCH /api/v1/pedidos/{idPedido}/listo` (solo EMPLEADO, sin body)
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `EMPLEADO`.
+2. **El service** (`PedidoServiceImpl.marcarPedidoListo`) revisa en orden:
+   - Que el empleado (el del token) trabaje en un restaurante; si no, `403`.
+   - Que el pedido exista; si no, `400`.
+   - Que el pedido sea **de su restaurante**; si no, `403`.
+   - Que el pedido esté `EN_PREPARACION`; si no, `400`.
+3. Genera el PIN (4 números al azar) y **avisa a los observadores** (patrón Observer, ver abajo).
+4. Si ningún aviso falló, guarda el pedido como `LISTO` con su PIN (columna `pin`).
+5. La respuesta **no incluye el PIN**: solo lo recibe el cliente por SMS.
+
+### Patrón Observer
+`PedidoListoObserver` (paquete `notificacion`) es una interfaz con un método, `pedidoListo(pedido, pin)`. El service no sabe qué se hace con el aviso: solo llama a todos los observadores.
+
+| Observador | Qué hace |
+|------------|----------|
+| `ConsolaObserver` | Escribe el aviso y el PIN en la consola. Siempre activo. |
+| `SmsTwilioObserver` | Manda el SMS real al celular del cliente usando la API de Twilio (`RestTemplate`). Solo existe si `twilio.activo=true`. |
+
+Para agregar otra reacción (por ejemplo, avisar a Trazabilidad) se crea otra clase que implemente la interfaz, sin tocar el service.
+
+### Configuración de Twilio
+Los datos de la cuenta **no se suben a git**. Cada persona los pone en su propio archivo `application-local.properties` (en la raíz del proyecto, ignorado por git):
+
+```properties
+twilio.account-sid=...
+twilio.auth-token=...
+twilio.numero-origen=...
+twilio.activo=true
+```
+
+Si el archivo no existe o `twilio.activo=false`, el proyecto funciona igual y el aviso solo sale en la consola. El celular al que llega el SMS es el que el cliente dio al registrarse (HU-08).
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con el pedido en `LISTO` (sin PIN) |
+| Sin token | `401` |
+| Rol distinto a EMPLEADO | `403` |
+| Pedido de otro restaurante | `403` |
+| Pedido que no existe o que no está en preparación | `400` |
+| El SMS no se pudo enviar | `400` y el pedido **sigue** `EN_PREPARACION` |
+
+### Para qué se hace así
+El aviso se hace **antes** de guardar: si el SMS falla, el pedido no queda `LISTO` y nunca hay un pedido listo cuyo cliente no conoce el PIN. Con el Observer, el service no depende de Twilio: se puede apagar el SMS real o agregar otros avisos sin cambiarlo.
+
 ## Estado actual
 
 | HU | Estado |
@@ -571,5 +625,6 @@ El empleado toma un pedido pendiente de su restaurante: el pedido queda a su nom
 | HU-11 Realizar pedido | ✅ Sprint 2 |
 | HU-12 Listar pedidos por estado (empleado) | ✅ Sprint 2 |
 | HU-13 Asignarse a un pedido | ✅ Sprint 3 |
+| HU-14 Notificar pedido listo (SMS con PIN) | ✅ Sprint 3 |
 
-**Qué sigue:** resto del sprint 3 (HU-14 a HU-17). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 3 (HU-15 a HU-17). Cada HU nueva agrega su parte aquí en este README.

@@ -43,4 +43,9 @@ public class Pedido {
     @ManyToOne
     @JoinColumn(name = "idEmpleado")
     private Usuario empleado;
+
+    // Codigo de 4 numeros que se genera cuando el pedido queda LISTO (HU-14).
+    // Se le manda al cliente por SMS y se le pedira al entregar (HU-15).
+    // Es null hasta que el pedido este listo.
+    private String pin;
 }
