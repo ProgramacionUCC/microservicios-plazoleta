@@ -80,6 +80,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/listo").hasRole("EMPLEADO")
                         // HU-15: "Yo como empleado... necesito entregar el pedido al cliente"
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/entregar").hasRole("EMPLEADO")
+                        // HU-16: "Yo como cliente... necesito poder cancelar mi pedido"
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/cancelar").hasRole("CLIENTE")
                         // "Exponer mis servicios solo a usuarios logueados": todo lo demas pide token
                         .anyRequest().authenticated()
                 )

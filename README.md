@@ -225,7 +225,8 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
 | `PATCH /api/v1/pedidos/{id}/asignar` | EMPLEADO — HU-13 |
 | `PATCH /api/v1/pedidos/{id}/listo` | EMPLEADO — HU-14 |
-| `PATCH /api/v1/pedidos/{id}/entregar` | EMPLEADO — HU-15 |
+| `PATCH /api/v1/pedidos/{id}/entregar` | EMPLEADO - HU-15 |
+| `PATCH /api/v1/pedidos/{id}/cancelar` | CLIENTE — HU-16 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -646,6 +647,46 @@ Cuando el cliente llega por su pedido, le dice al empleado el PIN que recibió p
 ### Para qué se hace así
 Solo se acepta pasar de `LISTO` a `ENTREGADO`, y como cada paso (asignar, marcar listo, entregar) exige un estado exacto, un pedido `ENTREGADO` no se puede mover más. El PIN evita que se entregue el pedido a quien no es el cliente. Para probar con SMS simulado, el PIN sale en la consola de la aplicación.
 
+## HU-16 Cancelar pedido
+
+### Qué hace
+Permite que el cliente cancele un pedido que todavía está `PENDIENTE`, para retractarse por cualquier motivo. Si el pedido ya está en preparación (o en cualquier otro estado), no se cancela y se le avisa.
+
+**Endpoint:** `PATCH /api/v1/pedidos/{idPedido}/cancelar` (solo CLIENTE, sin body)
+
+```
+PATCH /api/v1/pedidos/1/cancelar
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **El service** (`PedidoServiceImpl.cancelarPedido`) revisa en orden:
+   - Que el cliente (el del token) exista; si no, `400`.
+   - Que el pedido exista; si no, `400`.
+   - Que el pedido sea **del cliente que hizo login**; si es de otro, `403`.
+   - Que el estado sea `PENDIENTE`; si es otro, `400` con el mensaje de la HU.
+3. Cambia el estado a `CANCELADO` y devuelve el pedido con sus platos.
+4. Guarda el cambio en `trazabilidad` (pedido, estado `CANCELADO` y fecha actual), que es lo que usará la HU-17.
+5. Como `CANCELADO` no cuenta como "pedido en proceso", el cliente puede volver a pedir de inmediato (HU-11).
+
+Ejemplo de respuesta real (`200`):
+```json
+{"id":1,"estado":"CANCELADO","idRestaurante":1,"idEmpleado":null,"platos":[{"idPlato":1,"nombre":"Corral Clasica","cantidad":2}]}
+```
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Todo correcto | `200` con el pedido en `CANCELADO` |
+| Pedido que no existe | `400` `{"mensaje": "El pedido no existe"}` |
+| Pedido de otro cliente | `403` `{"mensaje": "Solo puedes cancelar tus propios pedidos"}` |
+| Pedido en `EN_PREPARACION`, `LISTO`, `ENTREGADO` o `CANCELADO` | `400` `{"mensaje": "Lo sentimos, tu pedido ya está en preparación y no puede cancelarse"}` |
+| Sin token | `401` |
+| Rol distinto a CLIENTE (EMPLEADO, PROPIETARIO, ADMINISTRADOR) | `403` |
+
+### Para qué se hace así
+La HU solo permite cancelar mientras el pedido está `PENDIENTE`: en cuanto el restaurante empieza a prepararlo, ya hay trabajo y costos de por medio. El cliente se identifica con el correo del token, no con un id en la URL, para que no pueda cancelar pedidos ajenos. Cada cancelación deja su fila en `trazabilidad` para poder reconstruir después qué le pasó al pedido.
+
 ## Estado actual
 
 | HU | Estado |
@@ -665,5 +706,6 @@ Solo se acepta pasar de `LISTO` a `ENTREGADO`, y como cada paso (asignar, marcar
 | HU-13 Asignarse a un pedido | ✅ Sprint 3 |
 | HU-14 Notificar pedido listo (SMS con PIN) | ✅ Sprint 3 |
 | HU-15 Entregar pedido con PIN | ✅ Sprint 3 |
+| HU-16 Cancelar pedido | ✅ Sprint 3 |
 
-**Qué sigue:** resto del sprint 3 (HU-16 y HU-17). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** HU-17 (sprint 3). Cada HU nueva agrega su parte aquí en este README.

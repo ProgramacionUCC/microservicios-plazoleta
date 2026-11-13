@@ -13,8 +13,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Puerta de entrada para pedidos (HU-11 a HU-15).
- * Crear pedido: solo CLIENTE. Listar, asignarse, marcar listo y entregar un pedido: solo EMPLEADO.
+ * Puerta de entrada para pedidos (HU-11 a HU-16).
+ * Crear pedido y cancelarlo: solo CLIENTE.
+ * Listar, asignarse, marcar listo y entregar un pedido: solo EMPLEADO.
  * (reglas en SecurityConfig)
  */
 @RestController
@@ -93,5 +94,18 @@ public class PedidoController {
                                                             Authentication authentication) {
         return ResponseEntity.ok(  // 200
                 pedidoService.entregarPedido(idPedido, entregarPedidoRequestDTO.getPin(), authentication.getName()));
+    }
+
+    /**
+     * HU-16: el cliente cancela su pedido.
+     * PATCH http://localhost:8080/api/v1/pedidos/5/cancelar
+     * Solo CLIENTE (regla en SecurityConfig). No lleva body: el id del pedido va en la URL
+     * y el cliente es quien hizo login (authentication.getName() = su correo).
+     */
+    @PatchMapping("/{idPedido}/cancelar")
+    public ResponseEntity<PedidoResponseDTO> cancelarPedido(@PathVariable Integer idPedido,
+                                                            Authentication authentication) {
+        return ResponseEntity.ok(  // 200
+                pedidoService.cancelarPedido(idPedido, authentication.getName()));
     }
 }
