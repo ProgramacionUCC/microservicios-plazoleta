@@ -34,7 +34,7 @@ import java.util.List;
 
 /**
  * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado),
- * HU-13 (asignarse un pedido) y HU-14 (marcar pedido listo).
+ * HU-13 (asignarse un pedido), HU-14 (marcar pedido listo) y HU-15 (entregar pedido).
  * Que el usuario sea CLIENTE o EMPLEADO ya lo reviso SecurityConfig.
  * El formato (restaurante, lista de platos, cantidades) ya lo reviso el DTO.
  */
@@ -247,6 +247,42 @@ public class PedidoServiceImpl implements PedidoService {
         pedido.setEstado("LISTO");
 
         // La respuesta no incluye el PIN: solo lo recibe el cliente por SMS
+        return convertirConPlatos(pedidoRepository.save(pedido));
+    }
+
+    /**
+     * HU-15: el empleado entrega el pedido al cliente.
+     * "Solo se puede pasar de Listo a Entregado. Un pedido Entregado no puede cambiar de estado."
+     * "Para pasar a Entregado el empleado digita el PIN enviado al cliente"
+     */
+    @Override
+    public PedidoResponseDTO entregarPedido(Integer idPedido, String pin, String correoEmpleado) {
+        // 1. El empleado que hizo login y el restaurante donde trabaja
+        EmpleadoRestaurante vinculo = buscarVinculoDelEmpleado(correoEmpleado);
+
+        // 2. El pedido debe existir
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ReglaNegocioException("El pedido no existe"));
+
+        // 3. Solo puede gestionar pedidos de SU restaurante -> si no, 403
+        if (!pedido.getRestaurante().getId().equals(vinculo.getRestaurante().getId())) {
+            throw new AccesoDenegadoException("Solo puedes gestionar los pedidos de tu restaurante");
+        }
+
+        // 4. Solo un pedido LISTO puede pasar a ENTREGADO.
+        //    Un pedido ya ENTREGADO (o en cualquier otro estado) no cambia.
+        if (!pedido.getEstado().equals("LISTO")) {
+            throw new ReglaNegocioException("Solo se puede entregar un pedido LISTO");
+        }
+
+        // 5. El PIN que digita el empleado debe ser el que recibio el cliente por SMS
+        if (!pedido.getPin().equals(pin)) {
+            throw new ReglaNegocioException("El PIN es incorrecto");
+        }
+
+        // 6. Todo bien: el pedido queda ENTREGADO
+        pedido.setEstado("ENTREGADO");
+
         return convertirConPlatos(pedidoRepository.save(pedido));
     }
 

@@ -225,6 +225,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `GET /api/v1/pedidos` | EMPLEADO — HU-12 |
 | `PATCH /api/v1/pedidos/{id}/asignar` | EMPLEADO — HU-13 |
 | `PATCH /api/v1/pedidos/{id}/listo` | EMPLEADO — HU-14 |
+| `PATCH /api/v1/pedidos/{id}/entregar` | EMPLEADO — HU-15 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -608,6 +609,43 @@ Si el archivo no existe o `twilio.activo=false`, el proyecto funciona igual y el
 ### Para qué se hace así
 El aviso se hace **antes** de guardar: si el SMS falla, el pedido no queda `LISTO` y nunca hay un pedido listo cuyo cliente no conoce el PIN. Con el Observer, el service no depende de Twilio: se puede apagar el SMS real o agregar otros avisos sin cambiarlo.
 
+## HU-15 Entregar el pedido con el PIN
+
+### Qué hace
+Cuando el cliente llega por su pedido, le dice al empleado el PIN que recibió por SMS (HU-14). El empleado lo digita y, si es correcto, el pedido pasa de `LISTO` a `ENTREGADO`. Un pedido `ENTREGADO` ya no puede cambiar de estado.
+
+**Endpoint:** `PATCH /api/v1/pedidos/{idPedido}/entregar` (solo EMPLEADO)
+
+**Body:**
+```json
+{ "pin": "4827" }
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `EMPLEADO`.
+2. **`EntregarPedidoRequestDTO`** revisa que el PIN venga en el body; si falta responde `400`.
+3. **El service** (`PedidoServiceImpl.entregarPedido`) revisa en orden:
+   - Que el empleado (el del token) trabaje en un restaurante; si no, `403`.
+   - Que el pedido exista; si no, `400`.
+   - Que el pedido sea **de su restaurante**; si no, `403`.
+   - Que el pedido esté `LISTO`; si no, `400`.
+   - Que el PIN sea el guardado en el pedido; si no, `400`.
+4. Si todo está bien, cambia el estado a `ENTREGADO`.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| PIN correcto | `200` con el pedido en `ENTREGADO` (sin PIN) |
+| Sin token | `401` |
+| Rol distinto a EMPLEADO | `403` |
+| Pedido de otro restaurante | `403` |
+| Pedido que no existe | `400` |
+| Pedido que no está `LISTO` (incluye uno ya `ENTREGADO`) | `400` |
+| PIN incorrecto o sin PIN | `400` y el pedido sigue `LISTO` |
+
+### Para qué se hace así
+Solo se acepta pasar de `LISTO` a `ENTREGADO`, y como cada paso (asignar, marcar listo, entregar) exige un estado exacto, un pedido `ENTREGADO` no se puede mover más. El PIN evita que se entregue el pedido a quien no es el cliente. Para probar con SMS simulado, el PIN sale en la consola de la aplicación.
+
 ## Estado actual
 
 | HU | Estado |
@@ -626,5 +664,6 @@ El aviso se hace **antes** de guardar: si el SMS falla, el pedido no queda `LIST
 | HU-12 Listar pedidos por estado (empleado) | ✅ Sprint 2 |
 | HU-13 Asignarse a un pedido | ✅ Sprint 3 |
 | HU-14 Notificar pedido listo (SMS con PIN) | ✅ Sprint 3 |
+| HU-15 Entregar pedido con PIN | ✅ Sprint 3 |
 
-**Qué sigue:** resto del sprint 3 (HU-15 a HU-17). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** resto del sprint 3 (HU-16 y HU-17). Cada HU nueva agrega su parte aquí en este README.

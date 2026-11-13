@@ -1,5 +1,6 @@
 package com.plazoleta.controller;
 
+import com.plazoleta.dto.request.EntregarPedidoRequestDTO;
 import com.plazoleta.dto.request.PedidoRequestDTO;
 import com.plazoleta.dto.response.PaginaResponseDTO;
 import com.plazoleta.dto.response.PedidoResponseDTO;
@@ -12,8 +13,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * Puerta de entrada para pedidos (HU-11, HU-12 y HU-13).
- * Crear pedido: solo CLIENTE. Listar por estado y asignarse un pedido: solo EMPLEADO.
+ * Puerta de entrada para pedidos (HU-11 a HU-15).
+ * Crear pedido: solo CLIENTE. Listar, asignarse, marcar listo y entregar un pedido: solo EMPLEADO.
  * (reglas en SecurityConfig)
  */
 @RestController
@@ -78,5 +79,19 @@ public class PedidoController {
                                                                Authentication authentication) {
         return ResponseEntity.ok(  // 200
                 pedidoService.marcarPedidoListo(idPedido, authentication.getName()));
+    }
+
+    /**
+     * HU-15: el empleado entrega el pedido al cliente usando el PIN que el cliente recibio.
+     * PATCH http://localhost:8080/api/v1/pedidos/5/entregar
+     * Body: { "pin": "4827" }
+     * Solo EMPLEADO (regla en SecurityConfig).
+     */
+    @PatchMapping("/{idPedido}/entregar")
+    public ResponseEntity<PedidoResponseDTO> entregarPedido(@PathVariable Integer idPedido,
+                                                            @Valid @RequestBody EntregarPedidoRequestDTO entregarPedidoRequestDTO,
+                                                            Authentication authentication) {
+        return ResponseEntity.ok(  // 200
+                pedidoService.entregarPedido(idPedido, entregarPedidoRequestDTO.getPin(), authentication.getName()));
     }
 }
