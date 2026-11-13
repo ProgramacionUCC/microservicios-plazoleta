@@ -10,6 +10,7 @@ import com.plazoleta.entity.Pedido;
 import com.plazoleta.entity.Plato;
 import com.plazoleta.entity.PlatoPedido;
 import com.plazoleta.entity.Restaurante;
+import com.plazoleta.entity.Trazabilidad;
 import com.plazoleta.entity.Usuario;
 import com.plazoleta.exception.AccesoDenegadoException;
 import com.plazoleta.exception.ReglaNegocioException;
@@ -18,6 +19,7 @@ import com.plazoleta.repository.PedidoRepository;
 import com.plazoleta.repository.PlatoPedidoRepository;
 import com.plazoleta.repository.PlatoRepository;
 import com.plazoleta.repository.RestauranteRepository;
+import com.plazoleta.repository.TrazabilidadRepository;
 import com.plazoleta.repository.UsuarioRepository;
 import com.plazoleta.notificacion.PedidoListoObserver;
 import com.plazoleta.service.PedidoService;
@@ -29,12 +31,14 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado),
- * HU-13 (asignarse un pedido), HU-14 (marcar pedido listo) y HU-15 (entregar pedido).
+ * HU-13 (asignarse un pedido), HU-14 (marcar pedido listo), HU-15 (entregar pedido)
+ * y HU-16 (cancelar pedido).
  * Que el usuario sea CLIENTE o EMPLEADO ya lo reviso SecurityConfig.
  * El formato (restaurante, lista de platos, cantidades) ya lo reviso el DTO.
  */
@@ -54,6 +58,7 @@ public class PedidoServiceImpl implements PedidoService {
     private final RestauranteRepository restauranteRepository;
     private final PlatoRepository platoRepository;
     private final EmpleadoRestauranteRepository empleadoRestauranteRepository;  // Para saber de que restaurante es el empleado
+    private final TrazabilidadRepository trazabilidadRepository;  // Para guardar cada cambio de estado (HU-17)
 
     // Observadores del "pedido listo" (HU-14). Spring entrega aqui TODAS las clases
     // que implementan PedidoListoObserver (consola y, si esta activo, Twilio).
@@ -284,6 +289,46 @@ public class PedidoServiceImpl implements PedidoService {
         pedido.setEstado("ENTREGADO");
 
         return convertirConPlatos(pedidoRepository.save(pedido));
+    }
+
+    /**
+     * HU-16: el cliente cancela su pedido.
+     * "Solo se pueden cancelar pedidos que se encuentren en estado Pendiente"
+     * "Si el estado del pedido es diferente a Pendiente, se le debe notificar al usuario"
+     */
+    @Override
+    public PedidoResponseDTO cancelarPedido(Integer idPedido, String correoCliente) {
+        // 1. El cliente es el usuario que hizo login (su correo viene del token)
+        Usuario cliente = usuarioRepository.findByCorreo(correoCliente)
+                .orElseThrow(() -> new ReglaNegocioException("El cliente no existe"));
+
+        // 2. El pedido debe existir
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ReglaNegocioException("El pedido no existe"));
+
+        // 3. Un cliente solo puede cancelar SUS pedidos. Si es de otro -> 403
+        if (!pedido.getCliente().getId().equals(cliente.getId())) {
+            throw new AccesoDenegadoException("Solo puedes cancelar tus propios pedidos");
+        }
+
+        // 4. Solo se puede cancelar si todavia esta PENDIENTE.
+        //    Si ya esta en preparacion (o en cualquier otro estado), se avisa.
+        if (!"PENDIENTE".equals(pedido.getEstado())) {
+            throw new ReglaNegocioException("Lo sentimos, tu pedido ya está en preparación y no puede cancelarse");
+        }
+
+        // 5. Se cancela el pedido
+        pedido.setEstado("CANCELADO");
+        Pedido pedidoGuardado = pedidoRepository.save(pedido);
+
+        // 6. HU-17: cada cambio de estado se guarda en la trazabilidad
+        trazabilidadRepository.save(Trazabilidad.builder()
+                .pedido(pedidoGuardado)
+                .estado("CANCELADO")
+                .fecha(LocalDateTime.now())
+                .build());
+
+        return convertirConPlatos(pedidoGuardado);
     }
 
     // Busca al empleado por el correo del token y el restaurante donde trabaja
