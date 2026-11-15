@@ -82,6 +82,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/entregar").hasRole("EMPLEADO")
                         // HU-16: "Yo como cliente... necesito poder cancelar mi pedido"
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/pedidos/*/cancelar").hasRole("CLIENTE")
+                        // HU-17: "Yo como cliente... necesito visualizar los cambios de estado de mi pedido"
+                        .requestMatchers(HttpMethod.GET, "/api/v1/pedidos/*/trazabilidad").hasRole("CLIENTE")
                         // "Exponer mis servicios solo a usuarios logueados": todo lo demas pide token
                         .anyRequest().authenticated()
                 )
