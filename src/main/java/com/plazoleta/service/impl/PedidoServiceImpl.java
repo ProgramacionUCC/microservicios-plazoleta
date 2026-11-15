@@ -5,6 +5,7 @@ import com.plazoleta.dto.request.PlatoPedidoRequestDTO;
 import com.plazoleta.dto.response.PaginaResponseDTO;
 import com.plazoleta.dto.response.PedidoResponseDTO;
 import com.plazoleta.dto.response.PlatoPedidoResponseDTO;
+import com.plazoleta.dto.response.TrazabilidadResponseDTO;
 import com.plazoleta.entity.EmpleadoRestaurante;
 import com.plazoleta.entity.Pedido;
 import com.plazoleta.entity.Plato;
@@ -29,6 +30,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -37,8 +39,8 @@ import java.util.List;
 
 /**
  * Reglas de negocio de pedidos: HU-11 (realizar pedido), HU-12 (listar por estado),
- * HU-13 (asignarse un pedido), HU-14 (marcar pedido listo), HU-15 (entregar pedido)
- * y HU-16 (cancelar pedido).
+ * HU-13 (asignarse un pedido), HU-14 (marcar pedido listo), HU-15 (entregar pedido),
+ * HU-16 (cancelar pedido) y HU-17 (consultar trazabilidad).
  * Que el usuario sea CLIENTE o EMPLEADO ya lo reviso SecurityConfig.
  * El formato (restaurante, lista de platos, cantidades) ya lo reviso el DTO.
  */
@@ -64,6 +66,7 @@ public class PedidoServiceImpl implements PedidoService {
     // que implementan PedidoListoObserver (consola y, si esta activo, Twilio).
     private final List<PedidoListoObserver> observadores;
 
+    @Transactional
     @Override
     public PedidoResponseDTO crearPedido(PedidoRequestDTO dto, String correoCliente) {
         // 1. El cliente es el usuario que hizo login (su correo viene del token)
@@ -107,6 +110,9 @@ public class PedidoServiceImpl implements PedidoService {
                 .restaurante(restaurante)
                 .build();
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
+
+        // HU-17: el pedido nace PENDIENTE, ese es el primer registro del historial
+        registrarTrazabilidad(pedidoGuardado, "PENDIENTE");
 
         // 6. Se guarda cada plato con su cantidad (tabla plato_pedido)
         //    platosValidados y dto.getPlatos() estan en el mismo orden
@@ -189,6 +195,7 @@ public class PedidoServiceImpl implements PedidoService {
      * "Un empleado puede asignarse a varios pedidos al tiempo"
      * "Solo se pueden listar y gestionar los pedidos del restaurante al que pertenece el empleado"
      */
+    @Transactional
     @Override
     public PedidoResponseDTO asignarPedido(Integer idPedido, String correoEmpleado) {
         // 1. El empleado que hizo login y el restaurante donde trabaja
@@ -211,14 +218,19 @@ public class PedidoServiceImpl implements PedidoService {
         // 5. Se anota quien lo tomo y pasa a EN_PREPARACION
         pedido.setEmpleado(vinculo.getEmpleado());
         pedido.setEstado("EN_PREPARACION");
+        Pedido pedidoGuardado = pedidoRepository.save(pedido);
 
-        return convertirConPlatos(pedidoRepository.save(pedido));
+        // HU-17: se registra el cambio de estado
+        registrarTrazabilidad(pedidoGuardado, "EN_PREPARACION");
+
+        return convertirConPlatos(pedidoGuardado);
     }
 
     /**
      * HU-14: el empleado marca el pedido como LISTO y el cliente recibe un SMS con un PIN.
      * "Si el SMS no se envia, el pedido no cambia de estado"
      */
+    @Transactional
     @Override
     public PedidoResponseDTO marcarPedidoListo(Integer idPedido, String correoEmpleado) {
         // 1. El empleado que hizo login y el restaurante donde trabaja
@@ -250,9 +262,13 @@ public class PedidoServiceImpl implements PedidoService {
         // 7. Todo salio bien: el pedido queda LISTO con su PIN guardado
         pedido.setPin(pin);
         pedido.setEstado("LISTO");
+        Pedido pedidoGuardado = pedidoRepository.save(pedido);
+
+        // HU-17: se registra el cambio de estado
+        registrarTrazabilidad(pedidoGuardado, "LISTO");
 
         // La respuesta no incluye el PIN: solo lo recibe el cliente por SMS
-        return convertirConPlatos(pedidoRepository.save(pedido));
+        return convertirConPlatos(pedidoGuardado);
     }
 
     /**
@@ -260,6 +276,7 @@ public class PedidoServiceImpl implements PedidoService {
      * "Solo se puede pasar de Listo a Entregado. Un pedido Entregado no puede cambiar de estado."
      * "Para pasar a Entregado el empleado digita el PIN enviado al cliente"
      */
+    @Transactional
     @Override
     public PedidoResponseDTO entregarPedido(Integer idPedido, String pin, String correoEmpleado) {
         // 1. El empleado que hizo login y el restaurante donde trabaja
@@ -287,8 +304,12 @@ public class PedidoServiceImpl implements PedidoService {
 
         // 6. Todo bien: el pedido queda ENTREGADO
         pedido.setEstado("ENTREGADO");
+        Pedido pedidoGuardado = pedidoRepository.save(pedido);
 
-        return convertirConPlatos(pedidoRepository.save(pedido));
+        // HU-17: se registra el cambio de estado
+        registrarTrazabilidad(pedidoGuardado, "ENTREGADO");
+
+        return convertirConPlatos(pedidoGuardado);
     }
 
     /**
@@ -296,6 +317,7 @@ public class PedidoServiceImpl implements PedidoService {
      * "Solo se pueden cancelar pedidos que se encuentren en estado Pendiente"
      * "Si el estado del pedido es diferente a Pendiente, se le debe notificar al usuario"
      */
+    @Transactional
     @Override
     public PedidoResponseDTO cancelarPedido(Integer idPedido, String correoCliente) {
         // 1. El cliente es el usuario que hizo login (su correo viene del token)
@@ -321,14 +343,47 @@ public class PedidoServiceImpl implements PedidoService {
         pedido.setEstado("CANCELADO");
         Pedido pedidoGuardado = pedidoRepository.save(pedido);
 
-        // 6. HU-17: cada cambio de estado se guarda en la trazabilidad
-        trazabilidadRepository.save(Trazabilidad.builder()
-                .pedido(pedidoGuardado)
-                .estado("CANCELADO")
-                .fecha(LocalDateTime.now())
-                .build());
+        // 6. HU-17: se registra el cambio de estado
+        registrarTrazabilidad(pedidoGuardado, "CANCELADO");
 
         return convertirConPlatos(pedidoGuardado);
+    }
+
+    /**
+     * HU-17: el cliente ve los cambios de estado de SU pedido.
+     * "Cada cliente puede consultar el historial de logs solo de sus propios pedidos"
+     */
+    @Override
+    public List<TrazabilidadResponseDTO> consultarTrazabilidad(Integer idPedido, String correoCliente) {
+        // 1. El cliente es el usuario que hizo login (su correo viene del token)
+        Usuario cliente = usuarioRepository.findByCorreo(correoCliente)
+                .orElseThrow(() -> new ReglaNegocioException("El cliente no existe"));
+
+        // 2. El pedido debe existir
+        Pedido pedido = pedidoRepository.findById(idPedido)
+                .orElseThrow(() -> new ReglaNegocioException("El pedido no existe"));
+
+        // 3. Solo puede ver SUS pedidos. Si es de otro -> 403
+        if (!pedido.getCliente().getId().equals(cliente.getId())) {
+            throw new AccesoDenegadoException("Solo puedes consultar la trazabilidad de tus propios pedidos");
+        }
+
+        // 4. Historial del mas viejo al mas nuevo
+        return trazabilidadRepository.findByPedidoIdOrderByIdAsc(idPedido).stream()
+                .map(t -> TrazabilidadResponseDTO.builder()
+                        .estado(t.getEstado())
+                        .fecha(t.getFecha())
+                        .build())
+                .toList();
+    }
+
+    // HU-17: guarda un registro por cada cambio de estado del pedido
+    private void registrarTrazabilidad(Pedido pedido, String estado) {
+        trazabilidadRepository.save(Trazabilidad.builder()
+                .pedido(pedido)
+                .estado(estado)
+                .fecha(LocalDateTime.now())
+                .build());
     }
 
     // Busca al empleado por el correo del token y el restaurante donde trabaja

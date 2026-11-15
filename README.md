@@ -227,6 +227,7 @@ El script de la base de datos trae un **administrador inicial** (el correo y la 
 | `PATCH /api/v1/pedidos/{id}/listo` | EMPLEADO — HU-14 |
 | `PATCH /api/v1/pedidos/{id}/entregar` | EMPLEADO - HU-15 |
 | `PATCH /api/v1/pedidos/{id}/cancelar` | CLIENTE — HU-16 |
+| `GET /api/v1/pedidos/{id}/trazabilidad` | CLIENTE — HU-17 |
 | Todo lo demás | Cualquier usuario logueado |
 
 5. Que el propietario sea **el dueño** del restaurante lo revisa `PlatoServiceImpl` comparando el correo del token con el del propietario. En la HU-07 se verifica contra el dueño del restaurante **del plato** (no el que llega en el body): si no coincide responde `403`.
@@ -687,6 +688,45 @@ Ejemplo de respuesta real (`200`):
 ### Para qué se hace así
 La HU solo permite cancelar mientras el pedido está `PENDIENTE`: en cuanto el restaurante empieza a prepararlo, ya hay trabajo y costos de por medio. El cliente se identifica con el correo del token, no con un id en la URL, para que no pueda cancelar pedidos ajenos. Cada cancelación deja su fila en `trazabilidad` para poder reconstruir después qué le pasó al pedido.
 
+## HU-17 Consultar trazabilidad del pedido
+
+### Qué hace
+Permite que el cliente vea el historial de cambios de estado de **su** pedido, del más antiguo al más nuevo, para saber cuánto se demoró cada paso. Cada cambio de estado queda registrado automáticamente.
+
+**Endpoint:** `GET /api/v1/pedidos/{idPedido}/trazabilidad` (solo CLIENTE, sin body)
+
+Ejemplo de respuesta real (`200`):
+```json
+[
+  {"estado":"PENDIENTE","fecha":"2026-11-15T10:00:12"},
+  {"estado":"EN_PREPARACION","fecha":"2026-11-15T10:05:40"},
+  {"estado":"LISTO","fecha":"2026-11-15T10:20:03"},
+  {"estado":"ENTREGADO","fecha":"2026-11-15T10:35:55"}
+]
+```
+
+### Cómo lo hace
+1. **`SecurityConfig`** deja pasar solo a usuarios con rol `CLIENTE`.
+2. **Cada cambio de estado** del pedido guarda una fila en `trazabilidad` (`pedido`, `estado` y `fecha`): al crearlo (`PENDIENTE`), al asignarlo (`EN_PREPARACION`), al marcarlo listo (`LISTO`), al entregarlo (`ENTREGADO`) y al cancelarlo (`CANCELADO`).
+3. **El service** (`PedidoServiceImpl.consultarTrazabilidad`) revisa en orden:
+   - Que el cliente (el del token) exista; si no, `400`.
+   - Que el pedido exista; si no, `400`.
+   - Que el pedido sea **del cliente que hizo login**; si es de otro, `403`.
+4. Busca el historial de ese pedido ordenado por id (del más viejo al más nuevo) y lo devuelve.
+
+### Respuestas
+| Caso | Respuesta |
+|------|-----------|
+| Cliente consulta su pedido | `200` con la lista de estados y fechas |
+| Pedido sin registros (creado antes de esta HU) | `200` con `[]` |
+| Pedido que no existe | `400` `{"mensaje": "El pedido no existe"}` |
+| Pedido de otro cliente | `403` `{"mensaje": "Solo puedes consultar la trazabilidad de tus propios pedidos"}` |
+| Sin token | `401` |
+| Rol distinto a CLIENTE (EMPLEADO, PROPIETARIO, ADMINISTRADOR) | `403` |
+
+### Para qué se hace así
+El `idPedido` se pide en la URL, pero el dueño se valida con el correo del token: así un cliente no puede ver el historial de pedidos ajenos aunque adivine el id. El orden por id conserva la secuencia real de los cambios, y la columna `fecha` es la que usará la HU-18 para calcular los tiempos. Los pedidos creados antes de esta HU no tienen su fila `PENDIENTE`, por eso su historial empieza en el siguiente cambio.
+
 ## Estado actual
 
 | HU | Estado |
@@ -707,5 +747,6 @@ La HU solo permite cancelar mientras el pedido está `PENDIENTE`: en cuanto el r
 | HU-14 Notificar pedido listo (SMS con PIN) | ✅ Sprint 3 |
 | HU-15 Entregar pedido con PIN | ✅ Sprint 3 |
 | HU-16 Cancelar pedido | ✅ Sprint 3 |
+| HU-17 Consultar trazabilidad del pedido | ✅ Sprint 3 |
 
-**Qué sigue:** HU-17 (sprint 3). Cada HU nueva agrega su parte aquí en este README.
+**Qué sigue:** HU-18 (sprint 3). Cada HU nueva agrega su parte aquí en este README.

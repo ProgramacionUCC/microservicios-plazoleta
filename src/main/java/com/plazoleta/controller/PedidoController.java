@@ -4,6 +4,7 @@ import com.plazoleta.dto.request.EntregarPedidoRequestDTO;
 import com.plazoleta.dto.request.PedidoRequestDTO;
 import com.plazoleta.dto.response.PaginaResponseDTO;
 import com.plazoleta.dto.response.PedidoResponseDTO;
+import com.plazoleta.dto.response.TrazabilidadResponseDTO;
 import com.plazoleta.service.PedidoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -12,9 +13,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
- * Puerta de entrada para pedidos (HU-11 a HU-16).
- * Crear pedido y cancelarlo: solo CLIENTE.
+ * Puerta de entrada para pedidos (HU-11 a HU-17).
+ * Crear pedido, cancelarlo y consultar su trazabilidad: solo CLIENTE.
  * Listar, asignarse, marcar listo y entregar un pedido: solo EMPLEADO.
  * (reglas en SecurityConfig)
  */
@@ -107,5 +110,19 @@ public class PedidoController {
                                                             Authentication authentication) {
         return ResponseEntity.ok(  // 200
                 pedidoService.cancelarPedido(idPedido, authentication.getName()));
+    }
+
+    /**
+     * HU-17: el cliente consulta los cambios de estado de SU pedido.
+     * GET http://localhost:8080/api/v1/pedidos/5/trazabilidad
+     * Solo CLIENTE (regla en SecurityConfig). No lleva body.
+     * Devuelve el historial del mas viejo al mas nuevo.
+     */
+    @GetMapping("/{idPedido}/trazabilidad")
+    public ResponseEntity<List<TrazabilidadResponseDTO>> consultarTrazabilidad(
+            @PathVariable Integer idPedido,
+            Authentication authentication) {
+        return ResponseEntity.ok(  // 200
+                pedidoService.consultarTrazabilidad(idPedido, authentication.getName()));
     }
 }

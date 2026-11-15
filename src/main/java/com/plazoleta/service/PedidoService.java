@@ -3,6 +3,9 @@ package com.plazoleta.service;
 import com.plazoleta.dto.request.PedidoRequestDTO;
 import com.plazoleta.dto.response.PaginaResponseDTO;
 import com.plazoleta.dto.response.PedidoResponseDTO;
+import com.plazoleta.dto.response.TrazabilidadResponseDTO;
+
+import java.util.List;
 
 /**
  * Que se puede hacer con pedidos.
@@ -29,4 +32,7 @@ public interface PedidoService {
 
     // HU-16: el cliente cancela un pedido SUYO que todavia esta PENDIENTE.
     PedidoResponseDTO cancelarPedido(Integer idPedido, String correoCliente);
+
+    // HU-17: el cliente consulta el historial de SU pedido, del mas viejo al mas nuevo.
+    List<TrazabilidadResponseDTO> consultarTrazabilidad(Integer idPedido, String correoCliente);
 }
